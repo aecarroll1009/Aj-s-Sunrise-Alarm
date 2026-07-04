@@ -1,0 +1,5 @@
+build/
+*.hex
+*.elf
+test/*.exe
+test/*.o
