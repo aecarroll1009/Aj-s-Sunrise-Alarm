@@ -49,6 +49,14 @@ constexpr uint8_t MANUAL_BRIGHTNESS_MIN   = 8;   // rotate-down floor; lamp stay
 // ---- RGBW color type ------------------------------------------------------
 struct Rgbw { uint8_t r, g, b, w; };
 
+// ---- Shared UI value types (spec SS 4.4-4.5; 12-hour clock throughout) -----
+struct ClockHM { uint8_t hour12; uint8_t minute; bool pm; }; // hour12 in 1..12
+struct CalDate { uint8_t month; uint8_t day; uint16_t year; };
+
+constexpr uint8_t  UI_BRIGHTNESS_STEP = 12;   // brightness units per detent on HOME
+constexpr uint16_t YEAR_MIN = 2024;           // Set Time year edit range
+constexpr uint16_t YEAR_MAX = 2099;           // spec mentions a mis-dial to 2099
+
 // ============================================================================
 // TODO(hardware): sunrise curve — placeholder keyframes + duration (spec SS 4.7)
 // ----------------------------------------------------------------------------

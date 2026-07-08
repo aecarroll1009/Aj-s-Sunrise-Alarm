@@ -1,0 +1,10 @@
+# Normalize line endings: text files stored as LF in the repo.
+* text=auto
+
+# Shell scripts must stay LF even in the working tree (bash chokes on CRLF).
+*.sh text eol=lf
+
+# Never munge binaries.
+*.pdf binary
+*.png binary
+*.hex binary

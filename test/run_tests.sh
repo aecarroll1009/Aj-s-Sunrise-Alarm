@@ -29,5 +29,6 @@ build_run() {
 build_run run_sunrise SunriseCurve.cpp                 test/test_sunrise_curve.cpp
 build_run run_light   LightEngine.cpp                  test/test_light_engine.cpp
 build_run run_alarm   AlarmSequence.cpp SunriseCurve.cpp test/test_alarm_sequence.cpp
+build_run run_ui      UIMenu.cpp                       test/test_ui_menu.cpp
 
 if [ "$fail" -eq 0 ]; then echo "==> ALL SUITES PASS"; else echo "==> SOME SUITES FAILED"; exit 1; fi
