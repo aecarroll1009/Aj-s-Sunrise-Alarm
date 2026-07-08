@@ -1,8 +1,8 @@
-# AJ's Sunrise Alarm Clock
+# Aj's Sunrise Alarm Clock
 
 A bedside lamp that wakes you with a simulated sunrise — a slow RGBW light ramp
 over ~20–30 minutes ending in a song. It's two products in one enclosure: an
-**alarm clock** with a fixed sunrise curve, and a **normal lamp** with solid
+alarm clock with a fixed sunrise curve, and a normal lamp with solid
 preset colors and adjustable brightness. The alarm is always armed in the
 background and is authoritative — once it starts it overrides whatever the lamp
 is doing, so you can never silently miss it.
@@ -15,8 +15,8 @@ Firmware for an Arduino Nano (ATmega328P). Built as a non-blocking state machine
 | Part | Notes |
 |---|---|
 | Arduino Nano (ATmega328P) | controller |
-| SK6812 **RGBW** strip, ~120 px | dedicated white channel; two-stage lampshade diffuser |
-| DS3231 RTC + CR2032 | battery-backed time **and** hardware alarm |
+| SK6812 RGBW strip, ~120 px | dedicated white channel; two-stage lampshade diffuser |
+| DS3231 RTC + CR2032 | battery-backed time and hardware alarm |
 | 2" OLED 128×64 (SSD1306/SH1106, I²C) | clock / menu display |
 | DFPlayer Mini + speaker | wake song from microSD |
 | Rotary encoder + soft-power button | menu UI + on/off |
@@ -29,17 +29,17 @@ Full pin map is in `Config.h`; wiring and power notes are in `BRING_UP.md`.
 Pure logic is split from hardware so the state machines can be unit-tested
 natively (no board required):
 
-- **Pure logic** (`SunriseCurve`, `LightEngine`, `AlarmSequence`, `UIMenu`) —
+- Pure logic (`SunriseCurve`, `LightEngine`, `AlarmSequence`, `UIMenu`) —
   no Arduino calls; exercised by a host g++ test harness.
-- **Hardware adapters** (`StripDriver`, `OledDriver`, `RtcDriver`,
+- Hardware adapters (`StripDriver`, `OledDriver`, `RtcDriver`,
   `DFPlayerDriver`, `InputDriver`, `Persistence`) — thin wrappers over the
   libraries.
-- **`AJs_Sunrise_Alarm.ino`** — wires them into the main loop.
+- `AJs_Sunrise_Alarm.ino` — wires them into the main loop.
 
-Key design guarantees: the alarm triggers off the **DS3231 hardware flag** (not a
-time comparison); armed/firedOnDate/preset/brightness persist to **EEPROM** and
+Key design guarantees: the alarm triggers off the DS3231 hardware flag (not a
+time comparison); armed/firedOnDate/preset/brightness persist to EEPROM and
 the alarm survives power loss (a reboot mid-alarm resumes sounding); the OLED uses
-a **page buffer** (not a full framebuffer) to fit the 2 KB SRAM; and the LED
+a page buffer (not a full framebuffer) to fit the 2 KB SRAM; and the LED
 `show()` never runs while audio is playing.
 
 ## Build
