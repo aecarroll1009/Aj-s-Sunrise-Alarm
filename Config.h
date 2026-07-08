@@ -41,6 +41,8 @@ constexpr uint16_t OLED_IDLE_MS     = 12000;  // ~10-15 s idle on HOME -> dim/bl
 constexpr uint32_t SNOOZE_MS        = 600000UL; // 10:00 snooze countdown
 constexpr uint16_t EDIT_FLASH_MS    = 500;    // editing field blink period (steady = navigating)
 constexpr uint16_t PREVIEW_MIN_MS   = 30;     // Color Preset: rate-limit show() to ~1 per 30 ms
+constexpr uint16_t LONG_PRESS_MS    = 600;    // encoder press >= this -> long press (save/confirm-exit)
+constexpr uint8_t  DEBOUNCE_MS      = 10;     // button debounce window
 
 // ---- Manual lamp behavior (spec SS 4.2) -----------------------------------
 constexpr uint8_t DEFAULT_BRIGHTNESS      = 200; // MANUAL brightness at first boot
