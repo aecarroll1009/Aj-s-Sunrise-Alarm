@@ -15,7 +15,7 @@ command -v g++ >/dev/null 2>&1 || { echo "g++ not found (expected at $W64)"; exi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-CXXFLAGS="-std=c++11 -I. -Wall -Wextra"
+CXXFLAGS="-std=c++11 -Isrc -Wall -Wextra"
 fail=0
 
 build_run() {
@@ -26,9 +26,9 @@ build_run() {
   echo
 }
 
-build_run run_sunrise SunriseCurve.cpp                 test/test_sunrise_curve.cpp
-build_run run_light   LightEngine.cpp                  test/test_light_engine.cpp
-build_run run_alarm   AlarmSequence.cpp SunriseCurve.cpp test/test_alarm_sequence.cpp
-build_run run_ui      UIMenu.cpp                       test/test_ui_menu.cpp
+build_run run_sunrise src/SunriseCurve.cpp                 test/test_sunrise_curve.cpp
+build_run run_light   src/LightEngine.cpp                  test/test_light_engine.cpp
+build_run run_alarm   src/AlarmSequence.cpp src/SunriseCurve.cpp test/test_alarm_sequence.cpp
+build_run run_ui      src/UIMenu.cpp                       test/test_ui_menu.cpp
 
 if [ "$fail" -eq 0 ]; then echo "==> ALL SUITES PASS"; else echo "==> SOME SUITES FAILED"; exit 1; fi

@@ -2,18 +2,52 @@
 
 namespace {
 
+// Clamps a brightness value to the manual lamp's valid range.
+//
+// Args:
+//   b: requested brightness.
+// Returns:
+//   b clamped to [MANUAL_BRIGHTNESS_MIN, 255].
 uint8_t clampBrightness(int16_t b) {
   if (b < MANUAL_BRIGHTNESS_MIN) return MANUAL_BRIGHTNESS_MIN;
   if (b > 255) return 255;
   return (uint8_t)b;
 }
 
-// Scale one channel by brightness (0..255). Rounded.
+// Scales one 0..255 color channel by a brightness value, with rounding.
+//
+// Args:
+//   c: channel value before scaling.
+//   brightness: scale factor, 0..255.
+// Returns:
+//   The scaled channel value.
 uint8_t scaleCh(uint8_t c, uint8_t brightness) {
   return (uint8_t)(((uint16_t)c * brightness + 127) / 255);
 }
 
-// Wrap an index into [0, count) for signed movement.
+// Scales every channel of a color by a brightness value.
+//
+// Args:
+//   base: color before scaling.
+//   brightness: scale factor, 0..255.
+// Returns:
+//   The scaled color.
+Rgbw scaleColor(Rgbw base, uint8_t brightness) {
+  Rgbw out;
+  out.r = scaleCh(base.r, brightness);
+  out.g = scaleCh(base.g, brightness);
+  out.b = scaleCh(base.b, brightness);
+  out.w = scaleCh(base.w, brightness);
+  return out;
+}
+
+// Wraps a signed index into [0, count) so scrolling can move either way.
+//
+// Args:
+//   idx: signed index, possibly out of range.
+//   count: number of valid slots; 0 always returns 0.
+// Returns:
+//   idx wrapped into [0, count).
 uint8_t wrapIndex(int16_t idx, uint8_t count) {
   if (count == 0) return 0;
   int16_t m = idx % (int16_t)count;
@@ -30,7 +64,7 @@ LightEngine::LightEngine()
       overrideColor_{0, 0, 0, 0} {}
 
 void LightEngine::togglePower() {
-  if (state_ == SUNRISE) return;              // alarm owns the light; ignore
+  if (state_ == SUNRISE) return;
   state_ = (state_ == LIGHT_OFF) ? MANUAL : LIGHT_OFF;
 }
 
@@ -51,7 +85,7 @@ void LightEngine::nextPreset(int16_t d) {
 }
 
 void LightEngine::beginOverride() {
-  state_ = SUNRISE;                           // preset_/brightness_ remembered
+  state_ = SUNRISE;
 }
 
 void LightEngine::setOverrideColor(Rgbw c) {
@@ -59,7 +93,7 @@ void LightEngine::setOverrideColor(Rgbw c) {
 }
 
 void LightEngine::endOverrideOff() {
-  state_ = LIGHT_OFF;                          // dismiss/cancel -> dark
+  state_ = LIGHT_OFF;
 }
 
 void LightEngine::restore(uint8_t presetIndex, uint8_t brightness) {
@@ -70,16 +104,9 @@ void LightEngine::restore(uint8_t presetIndex, uint8_t brightness) {
 Rgbw LightEngine::outputColor() const {
   switch (state_) {
     case SUNRISE:
-      return overrideColor_;                  // already the shaped/full color
-    case MANUAL: {
-      Rgbw base = COLOR_PRESETS[presetIndex_].c;
-      Rgbw out;
-      out.r = scaleCh(base.r, brightness_);
-      out.g = scaleCh(base.g, brightness_);
-      out.b = scaleCh(base.b, brightness_);
-      out.w = scaleCh(base.w, brightness_);
-      return out;
-    }
+      return overrideColor_;
+    case MANUAL:
+      return scaleColor(COLOR_PRESETS[presetIndex_].c, brightness_);
     case LIGHT_OFF:
     default:
       return Rgbw{0, 0, 0, 0};

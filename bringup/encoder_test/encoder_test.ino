@@ -1,6 +1,8 @@
-// Bring-up step 4 (spec SS 3.8): rotary encoder + encoder push + soft-power button.
-// Prints a running detent count and press events. Turning CW should count up; if
-// it counts down, swap CLK/DT (or just flip the sign in InputDriver later).
+// Bring-up step 4 (spec 3.8): rotary encoder, encoder push, and soft-power button.
+//
+// Prints a running detent count and press events. Turning clockwise should
+// count up; if it counts down, swap CLK/DT (or just flip the sign in
+// InputDriver later).
 //   CLK=D2  DT=D3  SW=D4  SoftPower=D5   (all INPUT_PULLUP)
 
 constexpr uint8_t PIN_CLK = 2, PIN_DT = 3, PIN_SW = 4, PIN_PWR = 5;

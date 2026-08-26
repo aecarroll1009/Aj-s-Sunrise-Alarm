@@ -1,7 +1,9 @@
-// Bring-up step 6 (spec SS 3.8): DFPlayer Mini + speaker.
-// Plays /mp3/0001.mp3 and reports the BUSY pin. Write-only: we never read the
-// module's serial (that can collide with the strip later). Set a comfortable
-// volume here; the real value goes in Config.h at the end.
+// Bring-up step 6 (spec 3.8): DFPlayer Mini and speaker.
+//
+// Plays /mp3/0001.mp3 and reports the BUSY pin. This is write-only: it never
+// reads the module's serial line, since that can collide with the strip
+// later. Set a comfortable volume here; the real value goes in Config.h at
+// the end.
 //   Nano D7 --[1k]--> DFPlayer RX     Nano D8 <-- DFPlayer TX     BUSY --> D9
 #include <SoftwareSerial.h>
 #include <DFRobotDFPlayerMini.h>

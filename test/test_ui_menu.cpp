@@ -3,7 +3,7 @@
 //   g++ -std=c++11 -I. -Wall -Wextra UIMenu.cpp test/test_ui_menu.cpp -o test/run_ui && test/run_ui
 
 #include <cstdio>
-#include "../UIMenu.h"
+#include "../src/UIMenu.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do {                                   \

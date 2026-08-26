@@ -1,11 +1,20 @@
 #include "RtcDriver.h"
 
 namespace {
-// 12h <-> 24h helpers. 12 AM -> 0, 12 PM -> 12.
+
+// Converts a 12-hour time to 24-hour form. 12 AM maps to 0, 12 PM to 12.
 uint8_t to24(ClockHM t) {
-  uint8_t h = t.hour12 % 12;          // 12 -> 0
+  uint8_t h = t.hour12 % 12;  // 12 -> 0
   return t.pm ? h + 12 : h;
 }
+
+// Converts a 24-hour time to 12-hour form.
+//
+// Args:
+//   h24: hour in 24-hour form, 0..23.
+//   minute: minute, passed through unchanged.
+// Returns:
+//   The equivalent 12-hour time.
 ClockHM from24(uint8_t h24, uint8_t minute) {
   ClockHM t;
   t.pm     = (h24 >= 12);
@@ -14,12 +23,13 @@ ClockHM from24(uint8_t h24, uint8_t minute) {
   t.minute = minute;
   return t;
 }
-}
+
+} // namespace
 
 bool RtcDriver::begin() {
   if (!rtc_.begin()) return false;
   rtc_.disable32K();
-  rtc_.writeSqwPinMode(DS3231_OFF);   // INT/SQW used for the alarm, not a square wave
+  rtc_.writeSqwPinMode(DS3231_OFF);  // INT/SQW is used for the alarm, not a square wave
   rtc_.disableAlarm(2);
   rtc_.clearAlarm(1);
   rtc_.clearAlarm(2);
@@ -41,7 +51,7 @@ void RtcDriver::setClock(ClockHM t, CalDate d) {
 }
 
 void RtcDriver::setAlarm(ClockHM a) {
-  // Daily match on hours+minutes+seconds; the date fields are ignored in this mode.
+  // Daily match on hours, minutes, and seconds; date fields are ignored in this mode.
   rtc_.clearAlarm(1);
   rtc_.setAlarm1(DateTime(2000, 1, 1, to24(a), a.minute, 0), DS3231_A1_Hour);
 }

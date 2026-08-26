@@ -3,7 +3,7 @@
 //   g++ -std=c++11 -I. -Wall -Wextra AlarmSequence.cpp SunriseCurve.cpp test/test_alarm_sequence.cpp -o test/run_alarm && test/run_alarm
 
 #include <cstdio>
-#include "../AlarmSequence.h"
+#include "../src/AlarmSequence.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do {                                   \

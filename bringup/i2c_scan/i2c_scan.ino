@@ -1,6 +1,7 @@
-// Bring-up step 3a (spec SS 3.8): I2C scan.
-// Expect TWO devices: 0x3C (OLED) and 0x68 (DS3231). If either is missing,
-// check SDA=A4 / SCL=A5 wiring and 5V/GND before going further.
+// Bring-up step 3a (spec 3.8): I2C scan.
+//
+// Expects two devices: 0x3C (OLED) and 0x68 (DS3231). If either is missing,
+// check the SDA=A4/SCL=A5 wiring and 5V/GND before going further.
 #include <Wire.h>
 
 void setup() {

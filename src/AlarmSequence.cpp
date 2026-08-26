@@ -2,11 +2,31 @@
 #include "SunriseCurve.h"
 
 namespace {
-// The "full brightness" wake color is just the end of the sunrise curve, so the
-// sounding/snooze light matches where the ramp finished (spec SS 4.7/4.8).
+
+// The full-brightness wake color is just the end of the sunrise curve, so
+// the sounding and snooze light matches where the ramp finished (spec
+// 4.7/4.8).
+//
+// Args:
+//   durationMs: the ramp's configured duration.
+// Returns:
+//   The color at the end of the ramp.
 Rgbw fullColor(uint32_t durationMs) {
   return SunriseCurve::sample(durationMs, durationMs).color;
 }
+
+// Builds the output for a frame where the alarm is sounding: full light and
+// audio on.
+//
+// Args:
+//   sunriseDurationMs: the ramp's configured duration.
+// Returns:
+//   The alarm output for a sounding frame.
+AlarmOutput soundingOutput(uint32_t sunriseDurationMs) {
+  AlarmOutput o{true, fullColor(sunriseDurationMs), true, 0};
+  return o;
+}
+
 } // namespace
 
 AlarmSequence::AlarmSequence()
@@ -23,48 +43,33 @@ void AlarmSequence::resumeSounding(uint32_t nowMs) {
 }
 
 AlarmOutput AlarmSequence::update(uint32_t nowMs, uint32_t sunriseDurationMs) {
-  AlarmOutput o{false, {0, 0, 0, 0}, false, 0};
-
   switch (state_) {
     case IDLE:
-      break;
+      return AlarmOutput{false, {0, 0, 0, 0}, false, 0};
 
     case SUNRISE: {
       SunriseSample s = SunriseCurve::sample(nowMs - startMs_, sunriseDurationMs);
-      if (s.complete) {
-        state_ = SOUNDING;                 // curve done -> full light + song
-        o.lightOverride = true;
-        o.lightColor    = fullColor(sunriseDurationMs);
-        o.audioOn       = true;
-      } else {
-        o.lightOverride = true;
-        o.lightColor    = s.color;         // ramping, silent
+      if (!s.complete) {
+        return AlarmOutput{true, s.color, false, 0};
       }
-      break;
+      state_ = SOUNDING;
+      return soundingOutput(sunriseDurationMs);
     }
 
     case SOUNDING:
-      o.lightOverride = true;
-      o.lightColor    = fullColor(sunriseDurationMs);
-      o.audioOn       = true;
-      break;
+      return soundingOutput(sunriseDurationMs);
 
-    case SNOOZED:
+    case SNOOZED: {
       // Wrap-safe deadline check: signed diff handles millis() rollover.
       if ((int32_t)(nowMs - snoozeDeadlineMs_) >= 0) {
-        state_ = SOUNDING;                 // countdown hit 0 -> replay song
-        o.lightOverride = true;
-        o.lightColor    = fullColor(sunriseDurationMs);
-        o.audioOn       = true;
-      } else {
-        o.lightOverride     = true;
-        o.lightColor        = fullColor(sunriseDurationMs); // light stays FULL
-        o.audioOn           = false;                        // song stopped
-        o.snoozeRemainingMs = snoozeDeadlineMs_ - nowMs;
+        state_ = SOUNDING;
+        return soundingOutput(sunriseDurationMs);
       }
-      break;
+      AlarmOutput o{true, fullColor(sunriseDurationMs), false, snoozeDeadlineMs_ - nowMs};
+      return o;
+    }
   }
-  return o;
+  return AlarmOutput{false, {0, 0, 0, 0}, false, 0};
 }
 
 AlarmSequence::Action AlarmSequence::onSoftPower() {
@@ -80,7 +85,7 @@ AlarmSequence::Action AlarmSequence::onEncoderLong() {
 }
 
 bool AlarmSequence::onEncoderShort(uint32_t nowMs) {
-  if (state_ != SOUNDING) return false;    // snooze is only offered while sounding
+  if (state_ != SOUNDING) return false;
   state_ = SNOOZED;
   snoozeDeadlineMs_ = nowMs + SNOOZE_MS;
   return true;

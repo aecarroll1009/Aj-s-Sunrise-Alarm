@@ -1,8 +1,9 @@
 #include "InputDriver.h"
 #include <Arduino.h>
 
-// ---- encoder decode (Ben Buxton full-step state table) ---------------------
+// Encoder decode: full-step state table (Ben Buxton's design).
 namespace {
+
 constexpr uint8_t R_START     = 0x0;
 constexpr uint8_t R_CW_FINAL  = 0x1;
 constexpr uint8_t R_CW_BEGIN  = 0x2;
@@ -24,9 +25,10 @@ const uint8_t TTABLE[7][4] = {
 };
 
 volatile uint8_t g_state = R_START;
-volatile int16_t g_accum = 0;         // signed detents, drained by takeRotation()
+volatile int16_t g_accum = 0;  // signed detents, drained by takeRotation()
 InputDriver*     g_self  = nullptr;
-}
+
+} // namespace
 
 void InputDriver::isrEncoder() {
   if (g_self) g_self->onEncoderEdge();
@@ -61,32 +63,38 @@ int16_t InputDriver::takeRotation() {
 
 void InputDriver::poll() {
   const uint32_t now = millis();
+  pollEncoderButton(now);
+  pollSoftPower(now);
+}
 
-  // --- encoder push (D4), debounced, short vs long ---
-  bool encRaw = (digitalRead(PIN_ENC_SW) == LOW);   // pressed = LOW
+void InputDriver::pollEncoderButton(uint32_t now) {
+  bool encRaw = (digitalRead(PIN_ENC_SW) == LOW);  // pressed reads low
   if (encRaw != encLastRaw_) { encLastRaw_ = encRaw; encEdgeMs_ = now; }
-  if ((now - encEdgeMs_) >= DEBOUNCE_MS) {
-    if (encRaw && !encDown_) {                       // debounced press
-      encDown_ = true; encDownMs_ = now; encLongFired_ = false; activity_ = true;
-    } else if (!encRaw && encDown_) {                // debounced release
-      encDown_ = false;
-      if (!encLongFired_) encShort_ = true;          // released before long threshold
-    } else if (encRaw && encDown_ && !encLongFired_ &&
-               (now - encDownMs_) >= LONG_PRESS_MS) {
-      encLong_ = true; encLongFired_ = true;         // fire long once while still held
-    }
-  }
+  if ((now - encEdgeMs_) < DEBOUNCE_MS) return;
 
-  // --- soft power (D5), debounced single press on the press edge ---
-  bool pwrRaw = (digitalRead(PIN_SOFT_PWR) == LOW);
-  if (pwrRaw != pwrLastRaw_) { pwrLastRaw_ = pwrRaw; pwrEdgeMs_ = now; }
-  if ((now - pwrEdgeMs_) >= DEBOUNCE_MS && pwrRaw != pwrStable_) {
-    pwrStable_ = pwrRaw;
-    if (pwrRaw) { softPwr_ = true; activity_ = true; }  // register on press
+  if (encRaw && !encDown_) {
+    // Debounced press.
+    encDown_ = true; encDownMs_ = now; encLongFired_ = false; activity_ = true;
+  } else if (!encRaw && encDown_) {
+    // Debounced release.
+    encDown_ = false;
+    if (!encLongFired_) encShort_ = true;  // released before the long-press threshold
+  } else if (encRaw && encDown_ && !encLongFired_ &&
+             (now - encDownMs_) >= LONG_PRESS_MS) {
+    encLong_ = true; encLongFired_ = true;  // fire long once while still held
   }
 }
 
-bool InputDriver::takeEncShort()   { bool v = encShort_; encShort_ = false; return v; }
-bool InputDriver::takeEncLong()    { bool v = encLong_;  encLong_  = false; return v; }
-bool InputDriver::takeSoftPower()  { bool v = softPwr_;  softPwr_  = false; return v; }
-bool InputDriver::takeActivity()   { bool v = activity_; activity_ = false; return v; }
+void InputDriver::pollSoftPower(uint32_t now) {
+  bool pwrRaw = (digitalRead(PIN_SOFT_PWR) == LOW);
+  if (pwrRaw != pwrLastRaw_) { pwrLastRaw_ = pwrRaw; pwrEdgeMs_ = now; }
+  if ((now - pwrEdgeMs_) < DEBOUNCE_MS || pwrRaw == pwrStable_) return;
+
+  pwrStable_ = pwrRaw;
+  if (pwrRaw) { softPwr_ = true; activity_ = true; }  // register on the press edge
+}
+
+bool InputDriver::takeEncShort()  { bool v = encShort_; encShort_ = false; return v; }
+bool InputDriver::takeEncLong()   { bool v = encLong_;  encLong_  = false; return v; }
+bool InputDriver::takeSoftPower() { bool v = softPwr_;  softPwr_  = false; return v; }
+bool InputDriver::takeActivity()  { bool v = activity_; activity_ = false; return v; }

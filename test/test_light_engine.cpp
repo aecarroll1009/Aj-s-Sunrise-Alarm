@@ -3,7 +3,7 @@
 //   g++ -std=c++11 -I. -Wall -Wextra LightEngine.cpp test/test_light_engine.cpp -o test/run_light && test/run_light
 
 #include <cstdio>
-#include "../LightEngine.h"
+#include "../src/LightEngine.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do {                                   \

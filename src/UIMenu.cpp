@@ -7,19 +7,33 @@ namespace {
 // Set Time:   HH MM AMPM MONTH DAY YEAR [Cancel]
 enum { F_HH = 0, F_MM = 1, F_AMPM = 2 };
 enum { T_MONTH = 3, T_DAY = 4, T_YEAR = 5 };
-constexpr uint8_t ALARM_FIELDS = 4;   // 3 real + Cancel
-constexpr uint8_t TIME_FIELDS  = 7;   // 6 real + Cancel
+constexpr uint8_t ALARM_FIELDS = 4;   // 3 real fields plus Cancel
+constexpr uint8_t TIME_FIELDS  = 7;   // 6 real fields plus Cancel
 
+// Wraps a signed value into [0, count).
+//
+// Args:
+//   v: signed value, possibly out of range.
+//   count: number of valid slots; 0 always returns 0.
+// Returns:
+//   v wrapped into [0, count).
 uint8_t wrapIdx(int16_t v, uint8_t count) {
   if (count == 0) return 0;
   int16_t m = v % (int16_t)count;
   if (m < 0) m += count;
   return (uint8_t)m;
 }
+
+// Wraps a value into the 1..12 range used for clock hours and months.
 uint8_t wrap1_12(int16_t v) { return (uint8_t)(wrapIdx(v - 1, 12) + 1); }
+
+// Wraps a value into the 0..59 range used for minutes.
 uint8_t wrap0_59(int16_t v) { return (uint8_t)wrapIdx(v, 60); }
+
+// Wraps a value into the 1..31 range used for calendar days.
 uint8_t wrap1_31(int16_t v) { return (uint8_t)(wrapIdx(v - 1, 31) + 1); }
 
+// Wraps a value into the configured calendar year range.
 uint16_t wrapYear(int16_t v) {
   const int16_t span = (int16_t)(YEAR_MAX - YEAR_MIN + 1);
   return (uint16_t)(YEAR_MIN + wrapIdx(v - (int16_t)YEAR_MIN, (uint8_t)span));
@@ -50,6 +64,7 @@ void UIMenu::tick(ClockHM clock, CalDate date) {
 uint8_t UIMenu::fieldCount() const {
   return (screen_ == Screen::SET_TIME) ? TIME_FIELDS : ALARM_FIELDS;
 }
+
 uint8_t UIMenu::cancelIndex() const { return fieldCount() - 1; }
 
 void UIMenu::enterSetAlarm() {
@@ -60,7 +75,7 @@ void UIMenu::enterSetAlarm() {
 }
 
 void UIMenu::enterSetTime() {
-  todWC_  = liveClock_;   // start from the live clock
+  todWC_  = liveClock_;
   dateWC_ = liveDate_;
   screen_ = Screen::SET_TIME;
   cursor_ = 0;
@@ -68,7 +83,7 @@ void UIMenu::enterSetTime() {
 }
 
 void UIMenu::abortToHome() {
-  screen_ = Screen::HOME;   // working copies simply not committed
+  screen_ = Screen::HOME;
   mode_   = Mode::NAVIGATING;
   cursor_ = 0;
 }
@@ -102,7 +117,8 @@ UIMenu::Result UIMenu::onRotate(int16_t delta, bool lampOn) {
   Result r;
   switch (screen_) {
     case Screen::HOME:
-      if (lampOn && delta != 0) {           // rotate = brightness when lamp on (spec SS 4.2/4.3)
+      // Rotating adjusts brightness when the lamp is on (spec 4.2/4.3).
+      if (lampOn && delta != 0) {
         r.cmd = Cmd::ADJUST_BRIGHTNESS;
         r.brightnessDelta = delta * (int16_t)UI_BRIGHTNESS_STEP;
       }
@@ -112,12 +128,13 @@ UIMenu::Result UIMenu::onRotate(int16_t delta, bool lampOn) {
       break;
     case Screen::SET_ALARM:
     case Screen::SET_TIME:
-      if (mode_ == Mode::EDITING) adjustValue(delta);   // flashing field: change value
-      else                        moveCursor(delta);    // navigating: move between fields
+      // Editing a flashing field changes its value; otherwise move between fields.
+      if (mode_ == Mode::EDITING) adjustValue(delta);
+      else                        moveCursor(delta);
       break;
     case Screen::COLOR_PRESET:
       cursorPreset_ = wrapIdx((int16_t)cursorPreset_ + delta, COLOR_PRESET_COUNT);
-      r.cmd = Cmd::PREVIEW_PRESET;                        // live preview on the strip
+      r.cmd = Cmd::PREVIEW_PRESET;  // live preview on the strip
       r.preset = cursorPreset_;
       break;
   }
@@ -135,10 +152,10 @@ UIMenu::Result UIMenu::handleMenuShort() {
       screen_       = Screen::COLOR_PRESET;
       break;
     case MI_ALARM_TOGGLE:
-      armed_   = !armed_;
-      r.cmd    = Cmd::SET_ARMED;
-      r.armed  = armed_;
-      break;                                 // stay in the menu
+      armed_  = !armed_;
+      r.cmd   = Cmd::SET_ARMED;
+      r.armed = armed_;
+      break;  // stays in the menu
     case MI_EXIT:
       screen_ = Screen::HOME;
       break;
@@ -150,11 +167,12 @@ UIMenu::Result UIMenu::handleEditShort() {
   Result r;
   if (mode_ == Mode::NAVIGATING) {
     if (cursor_ == cancelIndex()) {
-      screen_ = Screen::MENU;                // confirm [Cancel] -> discard + exit
+      screen_ = Screen::MENU;  // confirming [Cancel] discards and exits
     } else {
-      mode_ = Mode::EDITING;                 // first short-press enters edit
+      mode_ = Mode::EDITING;   // first short press enters edit
     }
-  } else {                                   // EDITING: confirm current, advance
+  } else {
+    // Editing: confirm the current field and advance.
     ++cursor_;
     mode_ = (cursor_ == cancelIndex()) ? Mode::NAVIGATING : Mode::EDITING;
   }
@@ -175,9 +193,10 @@ UIMenu::Result UIMenu::onShort() {
     case Screen::SET_TIME:
       r = handleEditShort();
       break;
-    case Screen::COLOR_PRESET:               // short = cancel/revert (spec SS 4.6)
+    case Screen::COLOR_PRESET:
+      // Short press cancels and reverts (spec 4.6).
       r.cmd = Cmd::PREVIEW_PRESET;
-      r.preset = entryPreset_;               // revert the strip to the entry color
+      r.preset = entryPreset_;
       screen_ = Screen::MENU;
       break;
   }
@@ -188,7 +207,7 @@ UIMenu::Result UIMenu::onLong() {
   Result r;
   switch (screen_) {
     case Screen::SET_ALARM:
-      committedAlarm_ = alarmWC_;            // save all
+      committedAlarm_ = alarmWC_;
       r.cmd = Cmd::COMMIT_ALARM;
       r.alarm = alarmWC_;
       screen_ = Screen::MENU;
@@ -200,7 +219,7 @@ UIMenu::Result UIMenu::onLong() {
       screen_ = Screen::MENU;
       break;
     case Screen::COLOR_PRESET:
-      committedPreset_ = cursorPreset_;      // save selected color
+      committedPreset_ = cursorPreset_;
       r.cmd = Cmd::COMMIT_PRESET;
       r.preset = cursorPreset_;
       screen_ = Screen::MENU;

@@ -17,12 +17,12 @@ Firmware for an Arduino Nano (ATmega328P). Built as a non-blocking state machine
 | Arduino Nano (ATmega328P) | controller |
 | SK6812 RGBW strip, ~120 px | dedicated white channel; two-stage lampshade diffuser |
 | DS3231 RTC + CR2032 | battery-backed time and hardware alarm |
-| 2" OLED 128×64 (SSD1306/SH1106, I²C) | clock / menu display |
+| 2" OLED 128×64 (SSD1306/SH1106, I²C) | clock and menu display |
 | DFPlayer Mini + speaker | wake song from microSD |
 | Rotary encoder + soft-power button | menu UI + on/off |
-| 5V / 8A supply, inline fuse, power injection both ends | see `BRING_UP.md` |
+| 5V / 8A supply, inline fuse, power injection both ends | see `docs/BRING_UP.md` |
 
-Full pin map is in `Config.h`; wiring and power notes are in `BRING_UP.md`.
+Full pin map is in `src/Config.h`; wiring and power notes are in `docs/BRING_UP.md`.
 
 ## Firmware architecture
 
@@ -36,11 +36,12 @@ natively (no board required):
   libraries.
 - `AJs_Sunrise_Alarm.ino` — wires them into the main loop.
 
-Key design guarantees: the alarm triggers off the DS3231 hardware flag (not a
-time comparison); armed/firedOnDate/preset/brightness persist to EEPROM and
-the alarm survives power loss (a reboot mid-alarm resumes sounding); the OLED uses
-a page buffer (not a full framebuffer) to fit the 2 KB SRAM; and the LED
-`show()` never runs while audio is playing.
+Key design guarantees:
+- The alarm triggers off the DS3231 hardware flag, not a time comparison.
+- Armed, firedOnDate, preset, and brightness persist to EEPROM, so the alarm
+  survives power loss; a reboot mid-alarm resumes sounding.
+- The OLED uses a page buffer, not a full framebuffer, to fit the 2 KB SRAM.
+- The LED `show()` never runs while audio is playing.
 
 ## Build
 
@@ -51,7 +52,7 @@ DFRobotDFPlayerMini.
 # compile the firmware for the Nano
 arduino-cli compile -b arduino:avr:nano .
 
-# upload (USB; brick feed to the 5V pin removed — see BRING_UP.md)
+# upload (USB; brick feed to the 5V pin removed — see docs/BRING_UP.md)
 arduino-cli upload -b arduino:avr:nano -p COMx .
 ```
 
@@ -66,21 +67,22 @@ bash test/run_tests.sh
 ## Layout
 
 ```
-AJs_Sunrise_Alarm.ino   main sketch (non-blocking loop)
-Config.h                pin map + hardware tunables/placeholders
-SunriseCurve.*          fixed wake-up light ramp        (pure)
-LightEngine.*           lamp state + alarm override     (pure)
-AlarmSequence.*         wake state machine              (pure)
-UIMenu.*                screen/menu/field-edit machine  (pure)
-*Driver.* / Persistence.*  hardware adapters
+AJs_Sunrise_Alarm.ino   main sketch (non-blocking loop); includes from src/
+src/                    firmware modules
+  Config.h                pin map + hardware tunables/placeholders
+  SunriseCurve.*          fixed wake-up light ramp        (pure)
+  LightEngine.*           lamp state + alarm override     (pure)
+  AlarmSequence.*         wake state machine              (pure)
+  UIMenu.*                screen/menu/field-edit machine  (pure)
+  *Driver.* / Persistence.*  hardware adapters
 test/                   native unit tests + run_tests.sh
 bringup/                standalone hardware diagnostic sketches
-BRING_UP.md             bench checklist for assembly + tuning
+docs/BRING_UP.md        bench checklist for assembly + tuning
 ```
 
 ## Status
 
 Firmware is complete and compiles for the Nano; the pure-logic core is fully
 unit-tested. Remaining work is hardware assembly and on-device tuning of the
-`TODO(hardware)` placeholders in `Config.h` (sunrise keyframes/duration, final
-preset list, song track/volume) — see `BRING_UP.md`.
+`TODO(hardware)` placeholders in `src/Config.h` (sunrise keyframes and duration,
+final preset list, song track and volume) — see `docs/BRING_UP.md`.

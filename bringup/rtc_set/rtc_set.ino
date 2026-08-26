@@ -1,6 +1,8 @@
-// Bring-up step 3b (spec SS 3.8): set + read the DS3231, and prove Alarm1 fires.
-// Uploads the sketch build time into the RTC ONCE, then prints the time each
-// second and programs Alarm1 for one minute ahead so you can watch the flag set.
+// Bring-up step 3b (spec 3.8): set and read the DS3231, and prove Alarm1 fires.
+//
+// Uploads the sketch's build time into the RTC a single time (comment that
+// line out after the first run), then prints the time each second and
+// programs Alarm1 for one minute ahead so you can watch the flag set.
 #include <RTClib.h>
 
 RTC_DS3231 rtc;

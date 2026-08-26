@@ -7,7 +7,7 @@
 
 #include <cstdio>
 #include <cstdlib>
-#include "../SunriseCurve.h"
+#include "../src/SunriseCurve.h"
 
 static int failures = 0;
 
