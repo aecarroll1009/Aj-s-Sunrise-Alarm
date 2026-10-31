@@ -11,8 +11,17 @@ core and where features sit; hole, insert, wall and screw sizes stay fixed.
 |---|---|---|
 | `base_tub` | opaque PLA | electronics, OLED/encoder/button front, jack + speaker grille rear |
 | `deck_core` | opaque PLA | screws onto the tub (M3 countersunk into heat-set inserts); 1 m strip wraps the core |
-| `shade_floor` | translucent PLA | ring that drops over the core and rests on the deck |
-| `shade_shell` | translucent PLA | open-bottom box; M3x10 countersunk screws go up through the floor into inserts in four corner bosses |
+| `shade_floor` | translucent PLA | 3 mm floor that drops over the core, with four slim 8 mm corner posts (M3 insert in each top) and a 1.2 mm-deep recess for the panel bottoms. Print floor-down. |
+| `shade_top` | translucent PLA | flat 3 mm top plate with a matching recess underneath and four flush countersunk holes. |
+| `panel_front/right/back/left` | translucent PLA | plain flat 2 mm panels with 1.6 mm raised goldfish (eye is a hole down to the panel). No holes or screws. STLs are exported flat, fish up: print as-is, no supports. |
+
+Shade assembly: install 4 M3 inserts in the post tops, stand the four panels in
+the floor's recess against the posts (front and back panels cover the side
+panels' ends), set the top plate on, and screw it down with 4x M3x8. The only
+visible screws are four flush heads on the top surface. Fish all swim
+counter-clockwise seen from above (3 front, 2 right, 3 back, 1 left);
+`FISH_COUNTS`, `FISH_SEED`, `FISH_SCALE`, `FISH_TILT`, `FISH_EYE_R` and
+`FISH_EYE_POS` control them.
 
 ## Run
 
@@ -33,8 +42,10 @@ cd cad && /c/Users/PC/tools/cad-venv/Scripts/python.exe render.py
 ## Output (`out/`)
 
 - `assembly.step` — all parts in position; import into Fusion.
-- `<part>.step` / `<part>.stl` — one per part, in assembled position.
-- `view_*.png` — front, rear, exploded, and core-with-strip previews.
+- `<part>.step` — one per part, in assembled position.
+- `<part>.stl` — one per part; assembled position, except panels (flat, fish up).
+- `view_*.png` — front, rear, exploded, head-on sides, core-with-strip, and
+  `view_fish_layout.png` (fish outlines per panel).
 
 ## Placeholders to measure
 

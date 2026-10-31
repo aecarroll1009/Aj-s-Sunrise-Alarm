@@ -92,7 +92,7 @@ def main() -> None:
     """Runs every check and exits non-zero on any failure."""
     parts = enc.build()
     tub, deck = parts["base_tub"], parts["deck_core"]
-    floor, shell = parts["shade_floor"], parts["shade_shell"]
+    floor, top = parts["shade_floor"], parts["shade_top"]
     front_in = -enc.BASE_D / 2 + enc.BASE_WALL
 
     print(f"OUTER_SCALE = {enc.OUTER_SCALE}")
@@ -157,19 +157,72 @@ def main() -> None:
     check_true("M3x8 reaches through 4 mm insert", 8.0 - enc.DECK_T >= 4.0,
                f"{8.0 - enc.DECK_T:.1f} mm past deck")
 
-    print("\nShade screws (M3x10 countersunk up into shell inserts)")
+    print("\nTop plate screws (M3x8 countersunk down into post-top inserts)")
     shade_xy = {(round(x, 2), round(y, 2)) for x, y in enc.shade_boss_positions()}
-    floor_clear = xy_set(holes(floor, "Z").get(round(enc.SCREW_CLEAR_D, 2), []))
-    check_true("floor clearance holes, 3.4 mm", len(floor_clear) == 4)
-    check_true("floor holes line up with shell inserts", floor_clear == shade_xy)
-    fcsk = cone_top_diameters(floor)
-    check_true("floor countersinks 6.6 mm", len(fcsk) == 4 and all(abs(c - enc.SCREW_HEAD_D) < 0.05 for c in fcsk), str(fcsk))
-    shell_ins = holes(shell, "Z").get(round(enc.INSERT_HOLE_D, 2), [])
-    check_true("shell insert holes, 4.2 mm", xy_set(shell_ins) == shade_xy, f"{len(shell_ins)} found")
-    for e in shell_ins[:1]:
-        check("shell insert hole depth", e[3], enc.SHADE_INSERT_DEPTH)
-    reach = enc.SHADE_FLOOR_T + enc.SHADE_INSERT_DEPTH
-    check_true("M3x10 fits: floor + hole depth >= 10", reach >= 10.0, f"{reach:.1f} mm available")
+    top_clear = xy_set(holes(top, "Z").get(round(enc.SCREW_CLEAR_D, 2), []))
+    check_true("top plate clearance holes, 3.4 mm", len(top_clear) == 4)
+    check_true("top holes line up with post inserts", top_clear == shade_xy)
+    tcsk = top.faces().filter_by(GeomType.CONE)
+    flush = all(abs(f.bounding_box().max.Z - (enc.SHADE_ZTOP + enc.SHADE_CAP_T)) < 1e-3
+                for f in tcsk)
+    check_true("top countersinks 6.6 mm, opening on the top face",
+               len(tcsk) == 4 and flush
+               and all(abs(c - enc.SCREW_HEAD_D) < 0.05 for c in cone_top_diameters(top)))
+    post_ins = holes(floor, "Z").get(round(enc.INSERT_HOLE_D, 2), [])
+    check_true("post-top insert holes, 4.2 mm", xy_set(post_ins) == shade_xy,
+               f"{len(post_ins)} found")
+    for e in post_ins[:1]:
+        check("post insert hole depth", e[3], enc.POST_INSERT_DEPTH)
+        check("post insert opens at post top", e[2] + e[3] / 2, enc.SHADE_ZTOP)
+    check_true("post wall around insert >= 1.5 mm",
+               (enc.POST - enc.INSERT_HOLE_D) / 2 >= 1.5,
+               f"{(enc.POST - enc.INSERT_HOLE_D) / 2:.1f} mm")
+    reach = enc.SHADE_CAP_T + enc.POST_INSERT_DEPTH
+    check_true("M3x8 fits: plate + hole depth >= 8", reach >= 8, f"{reach:.1f} mm available")
+    check_true("M3x8 reaches through 4 mm insert", 8 - enc.SHADE_CAP_T >= 4,
+               f"{8 - enc.SHADE_CAP_T:.1f} mm past plate")
+
+    print("\nFish panels")
+    shade_parts = {k: v for k, v in parts.items()
+                   if k.startswith("panel_") or k in ("shade_floor", "shade_top", "deck_core")}
+    names = list(shade_parts)
+    worst = 0.0
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            worst = max(worst, (shade_parts[a] & shade_parts[b]).volume)
+    check_true("no shade parts overlap (panels, top, floor+posts, core)", worst < 0.01,
+               f"max overlap {worst:.3f} mm3")
+    heading = {"front": (1, 0), "right": (0, 1), "back": (-1, 0), "left": (0, -1)}
+    for face in enc.FACES:
+        flat = enc.panel_flat(face)
+        eyes = [f for f in flat.faces().filter_by(GeomType.CYLINDER)
+                if f.radius is not None and f.radius < 3
+                and abs(f.bounding_box().min.Z - enc.PANEL_T) < 1e-3]
+        layout = enc.fish_layout(face)
+        check_true(f"{face}: {enc.FISH_COUNTS[face]} fish, each with an eye",
+                   len(layout) == enc.FISH_COUNTS[face] and len(eyes) == len(layout),
+                   f"{len(layout)} fish, {len(eyes)} eyes")
+        depths = {round(e.bounding_box().size.Z, 2) for e in eyes}
+        bottoms = {round(e.bounding_box().min.Z, 2) for e in eyes}
+        check_true(f"{face}: eyes go down to panel surface, not through",
+                   depths == {enc.FISH_H} and bottoms == {enc.PANEL_T},
+                   f"depth {sorted(depths)}, bottom at {sorted(bottoms)}")
+        check_true(f"{face}: no screw holes on the panel",
+                   not flat.faces().filter_by(GeomType.CONE)
+                   and len(flat.faces().filter_by(GeomType.CYLINDER)) == len(eyes))
+        bb = parts[f"panel_{face}"].bounding_box()
+        check_true(f"{face}: panel edges sit in floor and top recesses",
+                   abs(bb.min.Z - (enc.SHADE_Z0 - enc.SEAT_DEPTH)) < 1e-3
+                   and enc.SHADE_ZTOP < bb.max.Z <= enc.SHADE_ZTOP + enc.SEAT_DEPTH,
+                   f"{enc.SHADE_Z0 - bb.min.Z:.1f} mm down, {bb.max.Z - enc.SHADE_ZTOP:.1f} mm up")
+        mid = enc.place_panel(enc.Pos(1, 0, 0) * enc.Box(0.1, 0.1, 0.1), face).center()
+        org = enc.place_panel(enc.Box(0.1, 0.1, 0.1), face).center()
+        hx, hy = round(mid.X - org.X), round(mid.Y - org.Y)
+        check_true(f"{face}: fish swim counter-clockwise (seen from above)",
+                   (hx, hy) == heading[face], f"heading ({hx},{hy})")
+    big = max(max(p.bounding_box().size.X, p.bounding_box().size.Y)
+              for p in (floor, top))
+    check_true("largest shade part fits a 220 mm bed", big <= 220, f"{big:.0f} mm")
 
     print("\nShade fit over core")
     fbb = [f.bounding_box() for f in floor.faces().filter_by(GeomType.PLANE)

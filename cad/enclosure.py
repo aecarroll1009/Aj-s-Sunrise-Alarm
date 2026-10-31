@@ -8,15 +8,20 @@ bottom-centre of the base, +X is the long side, -Y is the front face.
 Parts (each exported as STEP and STL to ``cad/out``):
     base_tub    opaque PLA, holds the electronics and front/rear cutouts.
     deck_core   opaque PLA, screws onto the tub; the core carries the strip.
-    shade_floor translucent PLA, flat ring that locates on the core.
-    shade_shell translucent PLA, open-bottom box screwed up through the floor
-                into corner inserts.
+    shade_floor translucent PLA, floor ring that locates on the core, with
+                four slim corner posts carrying inserts in their tops.
+    shade_top   translucent PLA, flat top plate screwed down into the posts;
+                it clamps the panels against the floor.
+    panel_*     translucent PLA, four plain flat side panels with raised
+                goldfish, held only by shallow recesses in the floor and top.
+                Their STLs are exported lying flat, fish up, ready to print.
 
 Run:
     python cad/enclosure.py
 """
 
 import math
+import random
 from pathlib import Path
 
 from build123d import (
@@ -25,12 +30,14 @@ from build123d import (
     Compound,
     Cone,
     Cylinder,
-    Location,
+    Ellipse,
     Part,
+    Polygon,
     Pos,
     Rot,
     export_step,
     export_stl,
+    extrude,
 )
 
 OUT_DIR = Path(__file__).parent / "out"
@@ -44,15 +51,28 @@ DECK_T = 3.0
 TUB_H = BASE_H - DECK_T
 
 SHADE_W, SHADE_D, SHADE_H = (OUTER_SCALE * v for v in (170.0, 110.0, 60.0))
-SHADE_WALL = 2.0
 SHADE_FLOOR_T = 3.0
-SHADE_LIP_H = 2.0
-SHADE_FIT = 0.2
+SHADE_CAP_T = 3.0
+PANEL_T = 2.0
+PANEL_FIT = 0.2
+SEAT_DEPTH = 1.2
+SEAT_LIP = 1.2
+SHADE_WALL = SEAT_LIP + PANEL_FIT + PANEL_T
+POST = 8.0
+POST_INSERT_DEPTH = 6.0
 CORE_FIT = 0.4
-SHADE_BOSS_R = 4.5
-SHADE_BOSS_H = 10.0
-SHADE_BOSS_INSET = SHADE_WALL + 4.0
-SHADE_INSERT_DEPTH = 8.0
+SHADE_Z0 = BASE_H + SHADE_FLOOR_T
+SHADE_ZTOP = BASE_H + SHADE_H - SHADE_CAP_T
+FACES = ("front", "right", "back", "left")
+
+FISH_H = 1.6
+FISH_EYE_R = 2.9
+FISH_EYE_POS = (6.5, 1.0)
+FISH_COUNTS = {"front": 3, "right": 2, "back": 3, "left": 1}
+FISH_SEED = 7
+FISH_TILT = 25.0
+FISH_SCALE = (0.7, 0.9)
+FISH_GAP = 3.0
 
 STRIP_LEN = 1000.0
 STRIP_W = 10.0
@@ -107,10 +127,125 @@ def boss_positions() -> list[tuple[float, float]]:
 
 
 def shade_boss_positions() -> list[tuple[float, float]]:
-    """Returns the XY centres of the shade's corner screw bosses."""
-    x = SHADE_W / 2 - SHADE_BOSS_INSET
-    y = SHADE_D / 2 - SHADE_BOSS_INSET
+    """Returns the XY centres of the shade's corner posts."""
+    inset = SHADE_WALL + PANEL_FIT + POST / 2
+    x = SHADE_W / 2 - inset
+    y = SHADE_D / 2 - inset
     return [(sx * x, sy * y) for sx in (-1, 1) for sy in (-1, 1)]
+
+
+def panel_size(face: str) -> tuple[float, float]:
+    """Returns a side panel's (width, height) in its own plane.
+
+    Front and back panels run almost the full shade width and cover the ends
+    of the side panels, which fit between them. Every panel reaches
+    SEAT_DEPTH down into the floor and up into the top plate.
+    """
+    if face in ("front", "back"):
+        width = SHADE_W - 2 * (SEAT_LIP + PANEL_FIT)
+    else:
+        width = SHADE_D - 2 * SHADE_WALL - 2 * PANEL_FIT
+    return width, SHADE_ZTOP - SHADE_Z0 + 2 * SEAT_DEPTH - PANEL_FIT
+
+
+def panel_seat(face: str) -> Part:
+    """Returns the shallow recess cutter for a panel's top and bottom edges."""
+    w, h = panel_size(face)
+    cutter = Pos(0, 0, -PANEL_FIT) * Box(
+        w + 2 * PANEL_FIT, h + PANEL_FIT, PANEL_T + 2 * PANEL_FIT,
+        align=(Align.CENTER, Align.MIN, Align.MIN),
+    )
+    return place_panel(cutter, face)
+
+
+def place_panel(part: Part, face: str) -> Part:
+    """Moves a flat panel-local part onto its side of the shade.
+
+    Panel-local coordinates: u along +X is the viewer's right when facing the
+    panel from outside, v along +Y is up, and +Z points out of the lamp, with
+    the panel's inner face on Z = 0.
+
+    Args:
+        part: Solid in panel-local coordinates.
+        face: front, right, back or left.
+
+    Returns:
+        The solid in assembled position.
+    """
+    spin = {"front": 0, "right": 90, "back": 180, "left": -90}[face]
+    off = SHADE_WALL
+    z = SHADE_Z0 - SEAT_DEPTH
+    pos = {
+        "front": (0, -SHADE_D / 2 + off, z),
+        "right": (SHADE_W / 2 - off, 0, z),
+        "back": (0, SHADE_D / 2 - off, z),
+        "left": (-SHADE_W / 2 + off, 0, z),
+    }[face]
+    return Pos(*pos) * Rot(0, 0, spin) * Rot(90, 0, 0) * part
+
+
+def fish_profile(s: float) -> Part:
+    """Builds one raised cartoon goldfish, heading +X, centred on its body.
+
+    Args:
+        s: Size factor; 1.0 is a 38 mm nose-to-tail fish.
+
+    Returns:
+        The fish relief, FISH_H tall, with the eye cut through to its base.
+    """
+    body = Ellipse(14 * s, 9 * s)
+    tail = Polygon((-10 * s, 0), (-24 * s, 10 * s), (-19 * s, 0),
+                   (-24 * s, -10 * s), align=None)
+    fish = extrude(body + tail, FISH_H)
+    fish -= Pos(FISH_EYE_POS[0] * s, FISH_EYE_POS[1] * s, 0) * Cylinder(
+        FISH_EYE_R * s, FISH_H, align=BOTTOM
+    )
+    return fish
+
+
+def fish_layout(face: str) -> list[tuple[float, float, float, float]]:
+    """Picks non-overlapping fish placements for one panel.
+
+    Every fish heads toward the panel's u axis (the viewer's right), so going
+    around the lamp they all swim the same way. Positions, tilts and sizes
+    come from a seeded generator, so the layout is the same on every build.
+
+    Args:
+        face: front, right, back or left.
+
+    Returns:
+        A list of (u, v, tilt_degrees, size) per fish, in panel coordinates.
+    """
+    rng = random.Random(FISH_SEED * 100 + FACES.index(face))
+    w, h = panel_size(face)
+    keep_out = w / 2 - (POST + PANEL_T + 3 if face in ("front", "back") else 3)
+    u_lo, u_hi = -keep_out, keep_out
+    v_lo, v_hi = SEAT_DEPTH + 2, h - SEAT_DEPTH - 2
+    placed = []
+    for _ in range(5000):
+        if len(placed) == FISH_COUNTS[face]:
+            break
+        s = rng.uniform(*FISH_SCALE)
+        r = 22 * s
+        tilt = rng.uniform(-FISH_TILT, FISH_TILT)
+        cu = rng.uniform(u_lo + r, u_hi - r)
+        cv = rng.uniform(v_lo + r, v_hi - r)
+        if all(math.hypot(cu - pu, cv - pv) > r + pr + FISH_GAP
+               for pu, pv, pr in ((p[0], p[1], 22 * p[3]) for p in placed)):
+            placed.append((cu, cv, tilt, s))
+    if len(placed) != FISH_COUNTS[face]:
+        raise ValueError(f"could not fit {FISH_COUNTS[face]} fish on {face} panel")
+    return [(cu + 5 * s * math.cos(math.radians(t)),
+             cv + 5 * s * math.sin(math.radians(t)), t, s) for cu, cv, t, s in placed]
+
+
+def panel_flat(face: str) -> Part:
+    """Builds a side panel lying flat, fish up, in panel-local coordinates."""
+    w, h = panel_size(face)
+    panel = Box(w, h, PANEL_T, align=(Align.CENTER, Align.MIN, Align.MIN))
+    for u, v, tilt, s in fish_layout(face):
+        panel += Pos(u, v, PANEL_T) * Rot(0, 0, tilt) * fish_profile(s)
+    return panel
 
 
 def countersink(x: float, y: float, z: float, thickness: float,
@@ -303,54 +438,52 @@ def deck_core() -> Part:
 
 
 def shade_floor() -> Part:
-    """Builds the translucent floor ring that drops over the core."""
+    """Builds the floor with its four corner posts, over the core.
+
+    The panels' bottom edges sit in a shallow recess in the floor's top face;
+    each post takes an insert in its top for the top plate's screws.
+    """
     floor = Pos(0, 0, BASE_H) * Box(SHADE_W, SHADE_D, SHADE_FLOOR_T, align=BOTTOM)
-    lip_w = SHADE_W - 2 * (SHADE_WALL + SHADE_FIT)
-    lip_d = SHADE_D - 2 * (SHADE_WALL + SHADE_FIT)
-    lip_z = BASE_H + SHADE_FLOOR_T
-    floor += Pos(0, 0, lip_z) * Box(lip_w, lip_d, SHADE_LIP_H, align=BOTTOM)
-    floor -= Pos(0, 0, lip_z) * Box(
-        lip_w - 2 * SHADE_WALL, lip_d - 2 * SHADE_WALL, SHADE_LIP_H, align=BOTTOM
-    )
     floor -= Pos(0, 0, BASE_H) * Box(
         CORE_W + 2 * CORE_FIT, CORE_D + 2 * CORE_FIT, SHADE_FLOOR_T, align=BOTTOM
     )
     for x, y in shade_boss_positions():
-        floor -= Pos(x, y, lip_z) * Cylinder(
-            SHADE_BOSS_R + SHADE_FIT * 2, SHADE_LIP_H, align=BOTTOM
+        floor += Pos(x, y, SHADE_Z0) * Box(
+            POST, POST, SHADE_ZTOP - SHADE_Z0, align=BOTTOM
         )
-        floor -= countersink(x, y, BASE_H, SHADE_FLOOR_T, from_below=True)
+        floor -= Pos(x, y, SHADE_ZTOP - POST_INSERT_DEPTH) * Cylinder(
+            INSERT_HOLE_D / 2, POST_INSERT_DEPTH, align=BOTTOM
+        )
+    for face in FACES:
+        floor -= panel_seat(face)
     return floor
 
 
-def shade_shell() -> Part:
-    """Builds the translucent open-bottom shade box."""
-    z0 = BASE_H + SHADE_FLOOR_T
-    h = SHADE_H - SHADE_FLOOR_T
-    shell = Pos(0, 0, z0) * Box(SHADE_W, SHADE_D, h, align=BOTTOM)
-    shell -= Pos(0, 0, z0) * Box(
-        SHADE_W - 2 * SHADE_WALL, SHADE_D - 2 * SHADE_WALL, h - SHADE_WALL,
-        align=BOTTOM,
-    )
+def shade_top() -> Part:
+    """Builds the flat top plate that clamps the panels onto the floor.
+
+    Four countersunk M3 screws go down through it into the post tops; the
+    panels' top edges sit in a shallow recess in its underside.
+    """
+    top = Pos(0, 0, SHADE_ZTOP) * Box(SHADE_W, SHADE_D, SHADE_CAP_T, align=BOTTOM)
+    for face in FACES:
+        top -= panel_seat(face)
     for x, y in shade_boss_positions():
-        shell += Pos(x, y, z0) * Cylinder(SHADE_BOSS_R, SHADE_BOSS_H, align=BOTTOM)
-        shell += Pos(x, y, z0 + SHADE_BOSS_H) * Cone(
-            SHADE_BOSS_R, 0, SHADE_BOSS_R, align=BOTTOM
-        )
-        shell -= Pos(x, y, z0) * Cylinder(
-            INSERT_HOLE_D / 2, SHADE_INSERT_DEPTH, align=BOTTOM
-        )
-    return shell
+        top -= countersink(x, y, SHADE_ZTOP, SHADE_CAP_T)
+    return top
 
 
 def build() -> dict[str, Part]:
     """Builds every part in its assembled position."""
-    return {
+    parts = {
         "base_tub": base_tub(),
         "deck_core": deck_core(),
         "shade_floor": shade_floor(),
-        "shade_shell": shade_shell(),
+        "shade_top": shade_top(),
     }
+    for face in FACES:
+        parts[f"panel_{face}"] = place_panel(panel_flat(face), face)
+    return parts
 
 
 def report() -> None:
@@ -358,7 +491,7 @@ def report() -> None:
     wrap = strip_wrap()
     gap_x = (SHADE_W - 2 * SHADE_WALL - CORE_W) / 2
     gap_y = (SHADE_D - 2 * SHADE_WALL - CORE_D) / 2
-    gap_top = BASE_H + SHADE_H - SHADE_WALL - (BASE_H + CORE_H)
+    gap_top = SHADE_ZTOP - (BASE_H + CORE_H)
     print(f"core perimeter   {wrap['perimeter']:.0f} mm")
     print(f"strip turns      {wrap['turns']:.2f}")
     print(f"helix pitch      {wrap['pitch']:.1f} mm (gap between wraps {wrap['gap']:.1f} mm)")
@@ -377,8 +510,12 @@ def report() -> None:
           f"(walls inside {-BASE_D / 2 + BASE_WALL:.1f}..{BASE_D / 2 - BASE_WALL:.1f})")
     print(f"button nut x     {BUTTON_POS[0] - 7.0:.1f} (corner boss starts {-boss_x_lo:.1f})")
     print(f"speaker frame x  {GRILLE_POS[0] - 19.0:.1f} (corner boss starts {-boss_x_lo:.1f})")
-    print(f"core top z       {BASE_H + CORE_H:.1f} (shade inside top "
-          f"{BASE_H + SHADE_H - SHADE_WALL:.1f})")
+    print(f"core top z       {BASE_H + CORE_H:.1f} (shade inside top {SHADE_ZTOP:.1f})")
+    for face in FACES:
+        w, h = panel_size(face)
+        fish = ", ".join(f"({u:.0f},{v:.0f}) {t:+.0f}deg x{s:.2f}"
+                         for u, v, t, s in fish_layout(face))
+        print(f"panel {face:5s}      {w:.1f} x {h:.1f} mm; fish {fish}")
 
 
 def main() -> None:
@@ -387,7 +524,10 @@ def main() -> None:
     parts = build()
     for name, part in parts.items():
         export_step(part, str(OUT_DIR / f"{name}.step"))
-        export_stl(part, str(OUT_DIR / f"{name}.stl"))
+        if name.startswith("panel_"):
+            export_stl(panel_flat(name[len("panel_"):]), str(OUT_DIR / f"{name}.stl"))
+        else:
+            export_stl(part, str(OUT_DIR / f"{name}.stl"))
         bb = part.bounding_box()
         print(f"{name:12s} {bb.size.X:6.1f} x {bb.size.Y:6.1f} x {bb.size.Z:6.1f} mm"
               f"  vol {part.volume / 1000:6.1f} cm3")
