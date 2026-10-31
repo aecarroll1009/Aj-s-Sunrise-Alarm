@@ -15,6 +15,7 @@ COLORS = {
     "shade_floor": ("#ffd28c", 0.35),
     "shade_shell": ("#ffd28c", 0.25),
     "perfboard": ("#3fa34d", 1.0),
+    "oled_board": ("#2a5fa8", 1.0),
 }
 STRIP_COLOR = "#ff4fa0"
 
@@ -97,7 +98,8 @@ def main() -> None:
            "Base + core, strip path (front)")
     render(enc.OUT_DIR / "view_core_rear.png", core_only, {}, rear,
            "Base + core, strip path (rear)")
-    tub_only = {"base_tub": parts["base_tub"], "perfboard": enc.perfboard()}
+    tub_only = {"base_tub": parts["base_tub"], "perfboard": enc.perfboard(),
+                "oled_board": enc.oled_board()}
     render(enc.OUT_DIR / "view_tub_inside.png", tub_only, {},
            [(-120, -200, 260), (0, 0, 20), (0, 0, 1)],
            "Base tub, perfboard on standoffs", show_strip=False)

@@ -35,13 +35,15 @@ from build123d import (
 
 OUT_DIR = Path(__file__).parent / "out"
 
-BASE_W, BASE_D, BASE_H = 140.0, 80.0, 60.0
+OUTER_SCALE = 1.1
+
+BASE_W, BASE_D, BASE_H = (OUTER_SCALE * v for v in (140.0, 80.0, 50.0))
 BASE_WALL = 3.0
 BASE_FLOOR = 3.0
 DECK_T = 3.0
 TUB_H = BASE_H - DECK_T
 
-SHADE_W, SHADE_D, SHADE_H = 170.0, 110.0, 80.0
+SHADE_W, SHADE_D, SHADE_H = (OUTER_SCALE * v for v in (170.0, 110.0, 60.0))
 SHADE_WALL = 2.0
 SHADE_FLOOR_T = 3.0
 SHADE_LIP_H = 2.0
@@ -52,13 +54,17 @@ SHADE_BOSS_H = 10.0
 SHADE_BOSS_INSET = SHADE_WALL + 4.0
 SHADE_INSERT_DEPTH = 8.0
 
-CORE_W, CORE_D, CORE_H = 120.0, 60.0, 60.0
-CORE_WALL = 2.0
-
 STRIP_LEN = 1000.0
 STRIP_W = 10.0
-STRIP_MARGIN = 5.0
+STRIP_MARGIN = 3.0
+STRIP_PITCH = 11.0
 STRIP_START = 10.0
+
+CORE_W, CORE_D = OUTER_SCALE * 120.0, OUTER_SCALE * 60.0
+CORE_H = math.ceil(
+    2 * STRIP_MARGIN + STRIP_W + STRIP_PITCH * STRIP_LEN / (2 * (CORE_W + CORE_D))
+)
+CORE_WALL = 2.0
 WIRE_SLOT_W, WIRE_SLOT_H = 10.0, 6.0
 
 BOSS_R = 4.0
@@ -69,22 +75,24 @@ SCREW_CLEAR_D = 3.4
 SCREW_HEAD_D = 6.6
 
 OLED_WINDOW = (56.0, 29.0)
-OLED_POS = (-25.0, 36.0)
+OLED_PCB = (61.5, 39.5)
+OLED_POS = (OUTER_SCALE * 26.0, BASE_H / 2)
 ENCODER_HOLE_D = 8.4
-ENCODER_POS = (28.0, 30.0)
+ENCODER_POS = (OUTER_SCALE * -28.0, BASE_H / 2)
 BUTTON_HOLE_D = 10.4
-BUTTON_POS = (48.0, 30.0)
+BUTTON_POS = (OUTER_SCALE * -50.0, BASE_H / 2)
 
 JACK_HOLE_D = 11.2
-JACK_POS = (45.0, 20.0)
-GRILLE_POS = (-30.0, 34.0)
+JACK_POS = (OUTER_SCALE * 45.0, OUTER_SCALE * 20.0)
+GRILLE_POS = (OUTER_SCALE * -40.0, BASE_H / 2)
 GRILLE_R = 18.0
 GRILLE_HOLE_D = 3.0
 GRILLE_PITCH = 5.0
 
-PERF_SIZE = (90.0, 70.0)
+PERF_SIZE = (70.0, 50.0)
+PERF_POS = (0.0, 10.0)
 PERF_T = 1.6
-PERF_HOLE_PITCH = (85.0, 65.0)
+PERF_HOLE_PITCH = (65.0, 45.0)
 STANDOFF_H = 6.0
 STANDOFF_R = 4.0
 
@@ -135,13 +143,20 @@ def countersink(x: float, y: float, z: float, thickness: float,
 def perf_positions() -> list[tuple[float, float]]:
     """Returns the XY centres of the four perfboard standoffs."""
     x, y = PERF_HOLE_PITCH[0] / 2, PERF_HOLE_PITCH[1] / 2
-    return [(sx * x, sy * y) for sx in (-1, 1) for sy in (-1, 1)]
+    cx, cy = PERF_POS
+    return [(cx + sx * x, cy + sy * y) for sx in (-1, 1) for sy in (-1, 1)]
 
 
 def perfboard() -> Part:
     """Returns a stand-in for the perfboard, for previews only."""
     z = BASE_FLOOR + STANDOFF_H
-    return Pos(0, 0, z) * Box(*PERF_SIZE, PERF_T, align=BOTTOM)
+    return Pos(*PERF_POS, z) * Box(*PERF_SIZE, PERF_T, align=BOTTOM)
+
+
+def oled_board() -> Part:
+    """Returns a stand-in for the OLED module behind its window, for previews."""
+    y = -BASE_D / 2 + BASE_WALL + 2.0
+    return Pos(OLED_POS[0], y, OLED_POS[1]) * Box(OLED_PCB[0], 4.0, OLED_PCB[1])
 
 
 def strip_wrap() -> dict:
@@ -351,6 +366,19 @@ def report() -> None:
     print(f"strip tail       {wrap['tail'][0]} wall, {wrap['tail'][1]:.1f}, z={wrap['tail'][2]:.1f}")
     print(f"air gap sides    {gap_x:.1f} x {gap_y:.1f} mm, top {gap_top:.1f} mm")
     print(f"overall          {SHADE_W:.0f} x {SHADE_D:.0f} x {BASE_H + SHADE_H:.0f} mm")
+    oled_lo = OLED_POS[1] - OLED_PCB[1] / 2
+    oled_hi = OLED_POS[1] + OLED_PCB[1] / 2
+    print(f"oled pcb z       {oled_lo:.1f}..{oled_hi:.1f} (floor {BASE_FLOOR:.1f}, deck {TUB_H:.1f})")
+    oled_x_hi = OLED_POS[0] + OLED_PCB[0] / 2
+    boss_x_lo = BASE_W / 2 - BOSS_INSET - BOSS_R
+    print(f"oled pcb x edge  {oled_x_hi:.1f} (corner boss starts {boss_x_lo:.1f})")
+    perf_front = PERF_POS[1] - PERF_SIZE[1] / 2
+    print(f"perfboard y      {perf_front:.1f}..{PERF_POS[1] + PERF_SIZE[1] / 2:.1f} "
+          f"(walls inside {-BASE_D / 2 + BASE_WALL:.1f}..{BASE_D / 2 - BASE_WALL:.1f})")
+    print(f"button nut x     {BUTTON_POS[0] - 7.0:.1f} (corner boss starts {-boss_x_lo:.1f})")
+    print(f"speaker frame x  {GRILLE_POS[0] - 19.0:.1f} (corner boss starts {-boss_x_lo:.1f})")
+    print(f"core top z       {BASE_H + CORE_H:.1f} (shade inside top "
+          f"{BASE_H + SHADE_H - SHADE_WALL:.1f})")
 
 
 def main() -> None:
