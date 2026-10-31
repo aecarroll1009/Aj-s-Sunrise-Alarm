@@ -15,14 +15,15 @@ Firmware for an Arduino Nano (ATmega328P). Built as a non-blocking state machine
 | Part | Notes |
 |---|---|
 | Arduino Nano (ATmega328P) | controller |
-| SK6812 RGBW strip, ~120 px | dedicated white channel; two-stage lampshade diffuser |
+| SK6812 RGBW strip, 1 m / 60 px | dedicated white channel; wrapped around the LED core inside a translucent shade |
 | DS3231 RTC + CR2032 | battery-backed time and hardware alarm |
-| 2" OLED 128×64 (SSD1306/SH1106, I²C) | clock and menu display |
-| DFPlayer Mini + speaker | wake song from microSD |
+| 2.42" OLED 128×64 (SSD1309, I²C) | clock and menu display |
+| DFPlayer Mini + 4 Ω 3 W speaker | wake song from microSD |
 | Rotary encoder + soft-power button | menu UI + on/off |
-| 5V / 8A supply, inline fuse, power injection both ends | see `docs/BRING_UP.md` |
+| 5V / 8A supply, 5.5×2.5 panel jack, 5 A inline fuse, power injection both ends | see `docs/BRING_UP.md` |
 
 Full pin map is in `src/Config.h`; wiring and power notes are in `docs/BRING_UP.md`.
+The 3D-printed enclosure is in `cad/`.
 
 ## Firmware architecture
 

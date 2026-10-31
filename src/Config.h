@@ -22,17 +22,19 @@ constexpr uint8_t PIN_DF_BUSY   = 9;   // DFPlayer BUSY — plain input, playbac
 // A4 = SDA, A5 = SCL (OLED and DS3231 share the bus)
 
 // LED strip (spec 4.1).
-constexpr uint16_t LED_COUNT = 120;    // ~2 m of 60 LED/m around the ~5" inner shade
+constexpr uint16_t LED_COUNT = 60;     // 1 m of 60 LED/m wrapped around the rectangular core
 // Strip is SK6812 RGBW -> NEO_GRBW + NEO_KHZ800 when constructing Adafruit_NeoPixel.
 
 // I2C addresses (spec 3.5).
 constexpr uint8_t I2C_ADDR_OLED = 0x3C;
 constexpr uint8_t I2C_ADDR_RTC  = 0x68;
 
-// OLED chip select. Flip to 1 if the panel is actually an SH1106 (one-line
-// U8g2 constructor swap, spec 3.5/4.1). Kept as a single switch because the
-// board is in Seattle.
-#define OLED_IS_SH1106 0
+// OLED controller. The ordered panel is a 2.42" SSD1309 (I2C, 4-pin). The
+// others are one-line swaps if a different panel turns up (spec 3.5/4.1).
+#define OLED_SSD1306 0
+#define OLED_SH1106  1
+#define OLED_SSD1309 2
+#define OLED_DRIVER  OLED_SSD1309
 
 // Timing constants (spec 4.3, 4.4, 4.6, 4.8).
 constexpr uint16_t OLED_IDLE_MS     = 12000;  // ~10-15 s idle on HOME -> dim/blank

@@ -29,11 +29,13 @@ Do these in order. Don't move on until each one passes.
 
 1. Power rails only, no modules connected. Confirm barrel polarity; meter the
    +5V bus to the ground bus at about 5.0 V, with the barrel center pin at
-   +5V. Confirm the inline 8-10 A fuse is in place.
+   +5V. Confirm the inline 5 A blade fuse is in place on the +5V lead.
 2. Nano alone, USB only, with the brick feed to the 5V pin disconnected.
    Upload the stock Blink example to confirm the board, toolchain, and COM
    port all work.
-3. OLED and RTC, sharing I²C (SDA=A4/SCL=A5). Upload `bringup/i2c_scan` and
+3. OLED and RTC, sharing I²C (SDA=A4/SCL=A5). Before connecting the OLED,
+   check its back for a small 3-pin regulator: if there is none, power it
+   from the Nano's 3V3 pin instead of the 5V bus. Upload `bringup/i2c_scan` and
    expect to see 0x3C and 0x68. Then upload `bringup/rtc_set` to set the
    DS3231's time (comment out the `rtc.adjust(...)` line after the first
    run) and watch Alarm1 fire.
@@ -59,7 +61,10 @@ These are marked `TODO(hardware)` in `src/Config.h`; tune them on the real lamp:
   keyframes if it does.
 - Color preset list — final names (15 characters or fewer) and RGBW values (§4.4/4.6).
 - Song track and volume — `ALARM_TRACK` and `ALARM_VOLUME` (§3.6).
-- If the panel turns out to be an SH1106, flip `OLED_IS_SH1106` to 1 (§3.5).
+- OLED driver — `OLED_DRIVER` defaults to the SSD1309 (§3.5). If the image is
+  shifted or garbled, try `U8G2_SSD1309_128X64_NONAME0_1_HW_I2C` in
+  `src/OledDriver.h`; for a different panel, set `OLED_DRIVER` to
+  `OLED_SSD1306` or `OLED_SH1106`.
 
 ## Correctness checks already in the firmware
 - The alarm triggers off the DS3231 hardware flag, not a time comparison.

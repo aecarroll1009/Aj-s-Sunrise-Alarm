@@ -8,11 +8,11 @@
 //   2. Add power injection at the tail end, then run the full-white test
 //      and confirm the far end still holds about 5V, with no dim or warm
 //      tail. Watch that the Nano doesn't reset.
-//   Data = D6 via 330 ohm. 120 px.
+//   Data = D6 via 330 ohm. 60 px (1 m).
 #include <Adafruit_NeoPixel.h>
 
 constexpr uint8_t  PIN_DIN = 6;
-constexpr uint16_t N = 120;
+constexpr uint16_t N = 60;
 Adafruit_NeoPixel strip(N, PIN_DIN, NEO_GRBW + NEO_KHZ800);
 
 // Fills every pixel with one color and shows it immediately.
