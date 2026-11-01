@@ -196,12 +196,20 @@ def main() -> None:
     for face in enc.FACES:
         flat = enc.panel_flat(face)
         eyes = [f for f in flat.faces().filter_by(GeomType.CYLINDER)
-                if f.radius is not None and f.radius < 3
+                if f.radius is not None and f.radius < 1.5 * enc.FISH_EYE_R
                 and abs(f.bounding_box().min.Z - enc.PANEL_T) < 1e-3]
         layout = enc.fish_layout(face)
-        check_true(f"{face}: {enc.FISH_COUNTS[face]} fish, each with an eye",
-                   len(layout) == enc.FISH_COUNTS[face] and len(eyes) == len(layout),
+        source = "layout.json" if layout != enc.random_fish_layout(face) else "random"
+        check_true(f"{face}: {len(layout)} fish ({source}), each with an eye",
+                   len(layout) > 0 and len(eyes) == len(layout),
                    f"{len(layout)} fish, {len(eyes)} eyes")
+        u_lo, u_hi, v_lo, v_hi = enc.fish_zone(face)
+        boxes = [enc.place_fish(*f).bounding_box() for f in layout]
+        check_true(f"{face}: fish clear of recesses and panel end strips",
+                   all(b.min.X >= u_lo - 1e-3 and b.max.X <= u_hi + 1e-3
+                       and b.min.Y >= v_lo - 1e-3 and b.max.Y <= v_hi + 1e-3
+                       for b in boxes),
+                   f"zone u {u_lo:.0f}..{u_hi:.0f}, v {v_lo:.1f}..{v_hi:.1f}")
         depths = {round(e.bounding_box().size.Z, 2) for e in eyes}
         bottoms = {round(e.bounding_box().min.Z, 2) for e in eyes}
         check_true(f"{face}: eyes go down to panel surface, not through",

@@ -1,4 +1,4 @@
-"""Renders preview PNGs of the enclosure to ``cad/out``.
+"""Renders preview PNGs of the enclosure to ``cad/renders``.
 
 Run:
     python cad/render.py
@@ -123,7 +123,7 @@ def fish_layout_plot(path) -> None:
 
 def main() -> None:
     """Renders assembled, rear, exploded and core-only views."""
-    enc.OUT_DIR.mkdir(exist_ok=True)
+    enc.RENDER_DIR.mkdir(exist_ok=True)
     parts = enc.build()
     front = [(-260, -420, 260), (0, 0, 70), (0, 0, 1)]
     rear = [(260, 420, 260), (0, 0, 70), (0, 0, 1)]
@@ -132,29 +132,29 @@ def main() -> None:
                 "panel_right": (50, 0, 150), "panel_left": (-50, 0, 150),
                 "shade_top": (0, 0, 220)}
     core_only = {k: parts[k] for k in ("base_tub", "deck_core")}
-    render(enc.OUT_DIR / "view_front.png", parts, {}, front, "Assembled, front")
-    render(enc.OUT_DIR / "view_rear.png", parts, {}, rear, "Assembled, rear")
-    render(enc.OUT_DIR / "view_exploded.png", parts, exploded, front, "Exploded")
-    render(enc.OUT_DIR / "view_core_front.png", core_only, {}, front,
+    render(enc.RENDER_DIR / "view_front.png", parts, {}, front, "Assembled, front")
+    render(enc.RENDER_DIR / "view_rear.png", parts, {}, rear, "Assembled, rear")
+    render(enc.RENDER_DIR / "view_exploded.png", parts, exploded, front, "Exploded")
+    render(enc.RENDER_DIR / "view_core_front.png", core_only, {}, front,
            "Base + core, strip path (front)")
-    render(enc.OUT_DIR / "view_core_rear.png", core_only, {}, rear,
+    render(enc.RENDER_DIR / "view_core_rear.png", core_only, {}, rear,
            "Base + core, strip path (rear)")
     tub_only = {"base_tub": parts["base_tub"], "perfboard": enc.perfboard(),
                 "oled_board": enc.oled_board()}
-    render(enc.OUT_DIR / "view_tub_inside.png", tub_only, {},
+    render(enc.RENDER_DIR / "view_tub_inside.png", tub_only, {},
            [(-120, -200, 260), (0, 0, 20), (0, 0, 1)],
            "Base tub, perfboard on standoffs", show_strip=False)
     shade = {k: parts[k] for k in ("shade_floor", "shade_top")}
-    render(enc.OUT_DIR / "view_shade_under.png", shade, {"shade_top": (0, 0, 25)},
+    render(enc.RENDER_DIR / "view_shade_under.png", shade, {"shade_top": (0, 0, 25)},
            [(-160, -280, -170), (0, 0, 75), (0, 0, 1)],
            "Shade floor + posts, top lifted 25 mm", show_strip=False)
     mid = enc.BASE_H + enc.SHADE_H / 2
     for face, eye in (("front", (0, -600, mid)), ("right", (600, 0, mid)),
                       ("back", (0, 600, mid)), ("left", (-600, 0, mid))):
-        render(enc.OUT_DIR / f"view_side_{face}.png", parts, {},
+        render(enc.RENDER_DIR / f"view_side_{face}.png", parts, {},
                [eye, (0, 0, mid), (0, 0, 1)], f"{face.capitalize()} (head-on)",
                show_strip=False, parallel=True)
-    fish_layout_plot(enc.OUT_DIR / "view_fish_layout.png")
+    fish_layout_plot(enc.RENDER_DIR / "view_fish_layout.png")
 
 
 if __name__ == "__main__":

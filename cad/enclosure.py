@@ -5,7 +5,7 @@ rising from the base deck, and a translucent shade box that drops over the
 core and rests on the deck. All dimensions are millimetres; the origin is the
 bottom-centre of the base, +X is the long side, -Y is the front face.
 
-Parts (each exported as STEP and STL to ``cad/out``):
+Parts (each exported as a print-ready STEP to ``cad/to_print``):
     base_tub    opaque PLA, holds the electronics and front/rear cutouts.
     deck_core   opaque PLA, screws onto the tub; the core carries the strip.
     shade_floor translucent PLA, floor ring that locates on the core, with
@@ -14,12 +14,21 @@ Parts (each exported as STEP and STL to ``cad/out``):
                 it clamps the panels against the floor.
     panel_*     translucent PLA, four plain flat side panels with raised
                 goldfish, held only by shallow recesses in the floor and top.
-                Their STLs are exported lying flat, fish up, ready to print.
+
+Fish placements come from ``cad/fish/layout.json`` when it lists a panel
+(written by fish_io.py from hand-edited STEP files), otherwise from a seeded
+random layout.
+
+Every print file sits on the bed at Z = 0, centred on the origin, in its
+print orientation: panels lie flat with the fish up and the top plate is
+flipped so its visible face prints against the bed. ``cad/assembly`` gets one
+STEP with every part in its assembled position.
 
 Run:
     python cad/enclosure.py
 """
 
+import json
 import math
 import random
 from pathlib import Path
@@ -36,11 +45,15 @@ from build123d import (
     Pos,
     Rot,
     export_step,
-    export_stl,
     extrude,
 )
 
-OUT_DIR = Path(__file__).parent / "out"
+CAD_DIR = Path(__file__).parent
+PRINT_DIR = CAD_DIR / "to_print"
+ASSEMBLY_DIR = CAD_DIR / "assembly"
+RENDER_DIR = CAD_DIR / "renders"
+FISH_DIR = CAD_DIR / "fish"
+FISH_LAYOUT_FILE = FISH_DIR / "layout.json"
 
 OUTER_SCALE = 1.1
 
@@ -184,11 +197,12 @@ def place_panel(part: Part, face: str) -> Part:
     return Pos(*pos) * Rot(0, 0, spin) * Rot(90, 0, 0) * part
 
 
-def fish_profile(s: float) -> Part:
+def fish_profile(s: float, height: float = FISH_H) -> Part:
     """Builds one raised cartoon goldfish, heading +X, centred on its body.
 
     Args:
         s: Size factor; 1.0 is a 38 mm nose-to-tail fish.
+        height: Relief height.
 
     Returns:
         The fish relief, FISH_H tall, with the eye cut through to its base.
@@ -196,14 +210,45 @@ def fish_profile(s: float) -> Part:
     body = Ellipse(14 * s, 9 * s)
     tail = Polygon((-10 * s, 0), (-24 * s, 10 * s), (-19 * s, 0),
                    (-24 * s, -10 * s), align=None)
-    fish = extrude(body + tail, FISH_H)
+    fish = extrude(body + tail, height)
     fish -= Pos(FISH_EYE_POS[0] * s, FISH_EYE_POS[1] * s, 0) * Cylinder(
-        FISH_EYE_R * s, FISH_H, align=BOTTOM
+        FISH_EYE_R * s, height, align=BOTTOM
     )
     return fish
 
 
+def fish_zone(face: str) -> tuple[float, float, float, float]:
+    """Returns the (u_lo, u_hi, v_lo, v_hi) area a panel's fish must stay in.
+
+    It keeps fish clear of the floor and top recesses and, on the front and
+    back panels, off the end strips that cover the side panels and posts.
+    """
+    w, h = panel_size(face)
+    keep_out = w / 2 - (POST + PANEL_T + 3 if face in ("front", "back") else 3)
+    return -keep_out, keep_out, SEAT_DEPTH + 2, h - SEAT_DEPTH - 2
+
+
 def fish_layout(face: str) -> list[tuple[float, float, float, float]]:
+    """Returns the fish placements for one panel.
+
+    Uses the hand-placed layout in FISH_LAYOUT_FILE when it lists the panel,
+    otherwise random_fish_layout.
+
+    Args:
+        face: front, right, back or left.
+
+    Returns:
+        A list of (u, v, tilt_degrees, size) per fish, in panel coordinates,
+        where (u, v) is the centre of the fish's body.
+    """
+    if FISH_LAYOUT_FILE.exists():
+        saved = json.loads(FISH_LAYOUT_FILE.read_text(encoding="utf-8"))
+        if face in saved:
+            return [(f["u"], f["v"], f["tilt"], f["size"]) for f in saved[face]]
+    return random_fish_layout(face)
+
+
+def random_fish_layout(face: str) -> list[tuple[float, float, float, float]]:
     """Picks non-overlapping fish placements for one panel.
 
     Every fish heads toward the panel's u axis (the viewer's right), so going
@@ -214,13 +259,10 @@ def fish_layout(face: str) -> list[tuple[float, float, float, float]]:
         face: front, right, back or left.
 
     Returns:
-        A list of (u, v, tilt_degrees, size) per fish, in panel coordinates.
+        A list of (u, v, tilt_degrees, size) per fish, as fish_layout.
     """
     rng = random.Random(FISH_SEED * 100 + FACES.index(face))
-    w, h = panel_size(face)
-    keep_out = w / 2 - (POST + PANEL_T + 3 if face in ("front", "back") else 3)
-    u_lo, u_hi = -keep_out, keep_out
-    v_lo, v_hi = SEAT_DEPTH + 2, h - SEAT_DEPTH - 2
+    u_lo, u_hi, v_lo, v_hi = fish_zone(face)
     placed = []
     for _ in range(5000):
         if len(placed) == FISH_COUNTS[face]:
@@ -239,12 +281,23 @@ def fish_layout(face: str) -> list[tuple[float, float, float, float]]:
              cv + 5 * s * math.sin(math.radians(t)), t, s) for cu, cv, t, s in placed]
 
 
+def place_fish(u: float, v: float, tilt: float, s: float,
+               height: float = FISH_H) -> Part:
+    """Returns one fish standing on a flat panel's outer face."""
+    return Pos(u, v, PANEL_T) * Rot(0, 0, tilt) * fish_profile(s, height)
+
+
+def panel_plate(face: str) -> Part:
+    """Returns a panel's plain plate, lying flat in panel-local coordinates."""
+    w, h = panel_size(face)
+    return Box(w, h, PANEL_T, align=(Align.CENTER, Align.MIN, Align.MIN))
+
+
 def panel_flat(face: str) -> Part:
     """Builds a side panel lying flat, fish up, in panel-local coordinates."""
-    w, h = panel_size(face)
-    panel = Box(w, h, PANEL_T, align=(Align.CENTER, Align.MIN, Align.MIN))
-    for u, v, tilt, s in fish_layout(face):
-        panel += Pos(u, v, PANEL_T) * Rot(0, 0, tilt) * fish_profile(s)
+    panel = panel_plate(face)
+    for fish in fish_layout(face):
+        panel += place_fish(*fish)
     return panel
 
 
@@ -518,21 +571,37 @@ def report() -> None:
         print(f"panel {face:5s}      {w:.1f} x {h:.1f} mm; fish {fish}")
 
 
+def print_pose(name: str, part: Part) -> Part:
+    """Moves one part into its print orientation, centred on the bed at Z = 0.
+
+    Args:
+        name: Part name, as a key of build().
+        part: The part in assembled position.
+
+    Returns:
+        The part ready to slice without supports.
+    """
+    if name.startswith("panel_"):
+        part = panel_flat(name[len("panel_"):])
+    elif name == "shade_top":
+        part = Rot(180, 0, 0) * part
+    bb = part.bounding_box()
+    return Pos(-bb.center().X, -bb.center().Y, -bb.min.Z) * part
+
+
 def main() -> None:
-    """Builds all parts and writes STEP/STL files plus an assembly STEP."""
-    OUT_DIR.mkdir(exist_ok=True)
+    """Builds all parts and writes print STEPs plus an assembly STEP."""
+    PRINT_DIR.mkdir(exist_ok=True)
+    ASSEMBLY_DIR.mkdir(exist_ok=True)
     parts = build()
     for name, part in parts.items():
-        export_step(part, str(OUT_DIR / f"{name}.step"))
-        if name.startswith("panel_"):
-            export_stl(panel_flat(name[len("panel_"):]), str(OUT_DIR / f"{name}.stl"))
-        else:
-            export_stl(part, str(OUT_DIR / f"{name}.stl"))
-        bb = part.bounding_box()
+        printed = print_pose(name, part)
+        export_step(printed, str(PRINT_DIR / f"{name}.step"))
+        bb = printed.bounding_box()
         print(f"{name:12s} {bb.size.X:6.1f} x {bb.size.Y:6.1f} x {bb.size.Z:6.1f} mm"
               f"  vol {part.volume / 1000:6.1f} cm3")
     assembly = Compound(label="ajs_sunrise_alarm", children=list(parts.values()))
-    export_step(assembly, str(OUT_DIR / "assembly.step"))
+    export_step(assembly, str(ASSEMBLY_DIR / "assembly.step"))
     report()
 
 
