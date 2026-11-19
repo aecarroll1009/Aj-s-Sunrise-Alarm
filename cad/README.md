@@ -34,7 +34,7 @@ fish sit on top at +Z.
    about Z, scale them uniformly, copy or delete them. Keep each fish a
    separate body on the plate: don't Combine, mirror or stretch.
 2. Export it as STEP over the same file: File → Export, Type "STEP Files",
-   Location `cadish`, name `fish_edit_<face>`. Fusion's Save only stores
+   Location `cad\fish`, name `fish_edit_<face>`. Fusion's Save only stores
    a Fusion design in its cloud, which the import can't read.
 3. Run `python cad/fish_io.py import`. It recovers each fish's position, tilt
    and size into `fish/layout.json` and warns about any fish that enters the
@@ -46,8 +46,8 @@ It skips files that already exist unless you pass `--force`.
 
 ## Run
 
-The Python environment lives outside OneDrive at `C:\Users\PC\tools\cad-venv`
-(build123d + pyvista).
+The Python environment lives at `C:\Users\PC\tools\cad-venv` (build123d +
+pyvista), outside the repo.
 
 ```sh
 # build parts, export STEP files, print strip-wrap numbers
@@ -72,16 +72,26 @@ cd cad && /c/Users/PC/tools/cad-venv/Scripts/python.exe render.py
 `to_print/`, `assembly/` and `renders/` are regenerated on every build; `fish/`
 is an input and is only changed by `fish_io.py`.
 
-## Placeholders to measure
+## Status and fit checks
 
-Front cutouts (OLED window, encoder, button), rear speaker grille, plus
-mounts for the OLED and speaker.
+All parts were printed from `to_print/` (as of commit `d96723a`). The values
+below were set before the real parts arrived, so check each against the part
+with calipers at assembly. If one is off, change the constant, rebuild, and
+reprint only the affected part (usually `base_tub`).
 
-Perfboard is the kit's 50x70 mm board, set back from the front wall so the
-OLED module fits in front of it; it sits on four 6 mm standoffs with M3
-insert holes. `PERF_HOLE_PITCH` (65x45 mm) is a guess at the corner-hole
-spacing until measured. `OLED_PCB` (61.5x39.5 mm) is a typical 2.42" module
-size, used only for the clearance report and previews.
+| Constant | Value | Check against |
+|---|---|---|
+| `OLED_WINDOW` | 56 x 29 mm | the 2.42" SSD1309's visible glass |
+| `OLED_PCB` | 61.5 x 39.5 mm | the OLED board (clearance report and previews only; no mount yet) |
+| `BUTTON_HOLE_D` | 10.4 mm | the soft-power button's 10 mm thread |
+| `JACK_HOLE_D` | 11.2 mm | the DC-099 5.5x2.5 mm panel jack (11 mm nominal) |
+| `PERF_SIZE` / `PERF_HOLE_PITCH` | 70 x 50 mm / 65 x 45 mm (pitch is a guess) | the perfboard you use and its corner holes |
+| speaker grille | sized for a 38 mm speaker | the 1.5" 4 ohm speaker |
 
-Rear barrel jack is set for a DC-099 5.5x2.5 mm threaded panel jack (11 mm
-nominal, 11.2 mm printed clearance); confirm with calipers once it arrives.
+**Perfboard mismatch to resolve:** the CAD standoffs are placed for a 70x50
+board, but the parts checklist names the kit's 70x90 board with corner holes
+as the main board. Either use the 70x50 board from the kit, or update
+`PERF_SIZE`, `PERF_HOLE_PITCH` and `PERF_POS` and confirm it still clears the
+OLED and the corner bosses in the clearance report.
+
+The OLED and speaker have no dedicated mounts yet.

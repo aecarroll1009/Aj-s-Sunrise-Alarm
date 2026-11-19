@@ -1,9 +1,22 @@
 # AJ's Sunrise Alarm — Hardware Bring-Up Checklist
 
 Everything the firmware needs is written and unit-tested; this is the order
-to bring the hardware up in the fall. Distilled from the spec (§3.8 bring-up,
-§4.11 firmware build order, §3 golden rules) so you don't need the scanned
-PDF at the bench.
+to bring the hardware up in. Distilled from the spec (§3.8 bring-up, §4.11
+firmware build order, §3 golden rules) so you don't need the scanned PDF at
+the bench.
+
+As of 2026-11-18 all parts are in hand and the enclosure is printed. No step
+below has been run yet.
+
+## Before you start
+- RTC: the ZS-042 DS3231 board's "201" charging resistor is already removed,
+  so a plain CR2032 goes in the holder on the back. Wire it from the 6-pin
+  header: GND, VCC, SDA, SCL. Leave SQW and 32K unconnected.
+- microSD: 32 GB or smaller, FAT32 (or FAT16 for 2 GB and under). If it's a
+  used or no-name card, run H2testw on it first. Create `mp3\0001.mp3` and
+  ideally put nothing else on the card (see step 6).
+- Barrel jack: the supply's plug is 5.5×2.5 mm. Test-fit it in the panel jack
+  before wiring; a 2.5 mm plug on a 2.1 mm pin is loose and can arc.
 
 ## Golden rules (read first — §3)
 - The strip is powered directly by the 5V/8A supply, never through the Nano.
@@ -17,7 +30,9 @@ PDF at the bench.
 ## Toolchain (already installed on the home machine)
 - `arduino-cli` at `C:\Users\PC\AppData\Local\arduino-cli\arduino-cli.exe` (AVR core,
   plus NeoPixel, U8g2, RTClib, and DFRobotDFPlayerMini).
-- Native tests: `bash test/run_tests.sh` (needs w64devkit's g++ — see project notes).
+- Native tests: `/usr/bin/bash test/run_tests.sh` (needs w64devkit's g++ at
+  `C:\Users\PC\tools\w64devkit\bin`; the script adds it to `PATH`. Call Git
+  Bash's `bash` explicitly, since w64devkit's own `bash` is busybox and fails).
 - Compile the main sketch:
   `arduino-cli compile -b arduino:avr:nano .`
 - Compile and upload a bring-up sketch, e.g.:
@@ -36,12 +51,18 @@ Do these in order. Don't move on until each one passes.
 3. OLED and RTC, sharing I²C (SDA=A4/SCL=A5). Before connecting the OLED,
    check its back for a small 3-pin regulator: if there is none, power it
    from the Nano's 3V3 pin instead of the 5V bus. Upload `bringup/i2c_scan` and
-   expect to see 0x3C and 0x68. Then upload `bringup/rtc_set` to set the
+   expect to see 0x3C (OLED), 0x57 (the 24C32 EEPROM on the ZS-042 board,
+   unused by the firmware) and 0x68 (DS3231). If the OLED shows up at 0x3D
+   instead, the firmware needs `setI2CAddress(0x3D * 2)` on the U8g2 object
+   before `begin()`. Then upload `bringup/rtc_set` to set the
    DS3231's time (comment out the `rtc.adjust(...)` line after the first
    run) and watch Alarm1 fire.
 4. Encoder and button. Upload `bringup/encoder_test`. Turning clockwise
    should count up; if it counts down, swap CLK and DT. Confirm both the
-   encoder push and the soft-power button print an event.
+   encoder push and the soft-power button print an event. The soft-power
+   button is one leg to D5 and the other to GND, no resistor; it must be
+   momentary normally-open (a normally-closed switch reads as permanently
+   held).
 5. Strip. Upload `bringup/strip_test`. Start with head-end power, data, and
    the 1000 µF cap only, at low brightness, and confirm the pixel count and
    that R/G/B/W each read pure — a tinted white means the color order isn't
@@ -49,7 +70,12 @@ Do these in order. Don't move on until each one passes.
    the far end still holds about 5 V and the Nano doesn't reset (if it
    resets, either the cap isn't doing its job or a ground is loose).
 6. DFPlayer. Upload `bringup/dfplayer_test` with `/mp3/0001.mp3` on the
-   microSD. Confirm audio plays and the BUSY pin reads "playing".
+   microSD. Confirm audio plays and the BUSY pin reads "playing". The speaker
+   goes on SPK_1/SPK_2 (not DAC_L/DAC_R), and the 100 µF + 0.1 µF caps go at
+   the module. Note: the test sketch and the driver call `play(1)`, which plays
+   the first file in copy order anywhere on the card, not specifically
+   `/mp3/0001.mp3`. With the song as the only file it's the same thing; if the
+   wrong audio plays, switch both to `playMp3Folder(1)`.
 7. All together. Disconnect USB, connect the brick to the 5V pin, flash the
    real firmware (over USB with the brick feed removed), then run it from
    the brick.

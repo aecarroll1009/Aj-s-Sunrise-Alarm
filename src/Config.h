@@ -4,8 +4,8 @@
 // Pin map, hardware constants, and bring-up placeholders.
 //
 // Everything the firmware needs to know about this board lives here. Values
-// marked TODO(hardware) are the ones the spec (4.12) defers to bring-up in
-// Seattle: exact sunrise keyframes and duration, the final preset list, and
+// marked TODO(hardware) are the ones the spec (4.12) defers to bring-up:
+// exact sunrise keyframes and duration, the final preset list, and
 // the song track and volume. They're placeholders for now so the firmware
 // compiles and runs; tune them on real hardware.
 
