@@ -102,21 +102,80 @@ def main() -> None:
     front = sorted((d, e) for d, es in tub_y.items() for e in es if e[1] < 0)
     print(f"  measured front holes: "
           + ", ".join(f"{d:.2f} mm at x={e[0]:.1f}" for d, e in front))
-    for name, want, x in (("button hole", 10.4, enc.BUTTON_POS[0]),
-                          ("encoder hole", 8.4, enc.ENCODER_POS[0])):
-        hits = [(d, e) for d, e in front if abs(e[0] - x) < 0.01]
+    for name, want, x, wall in (
+            ("button hole", 12.4, enc.BUTTON_POS[0], enc.BASE_WALL),
+            ("encoder hole", 7.4, enc.ENCODER_POS[0], enc.ENCODER_WALL)):
+        hits = [(d, e) for d, e in front if abs(e[0] - x) < 0.01 and d < 15]
         check_true(f"{name} present", len(hits) == 1)
         if hits:
             check(f"{name} diameter (measured)", hits[0][0], want)
-            check(f"{name} through wall length", hits[0][1][3], enc.BASE_WALL)
+            check(f"{name} through wall length", hits[0][1][3], wall)
+    pockets = [(d, e) for d, e in front
+               if abs(e[0] - enc.ENCODER_POS[0]) < 0.01 and d >= 15]
+    check_true("encoder pocket on the inside face", len(pockets) == 1)
+    if pockets:
+        d, e = pockets[0]
+        check("encoder pocket diameter", d, 20.0)
+        outer_skin = e[1] - e[3] / 2 - (-enc.BASE_D / 2)
+        check("wall left at encoder (pocket floor to outside)", outer_skin, 3.0)
     check_true("button is the leftmost control",
                enc.BUTTON_POS[0] < enc.ENCODER_POS[0] < enc.OLED_POS[0])
     w, h, cx, cz = front_opening(tub, -enc.BASE_D / 2 - 0.01, front_in + 0.01)
-    check("OLED window width", w, 56.0)
-    check("OLED window height", h, 29.0)
-    check("OLED window centre height = base mid", cz, enc.BASE_H / 2)
-    check_true("OLED display area 55.01x27.49 fits window",
-               w >= 55.01 and h >= 27.49, f"{w:.2f} x {h:.2f}")
+    check("OLED window width", w, 61.0)
+    check("OLED window height", h, 41.0)
+    check("OLED window centre height = inside mid", cz,
+          (enc.BASE_FLOOR + enc.TUB_H) / 2)
+    check_true("OLED glass 60x40 passes through window with clearance",
+               w - 60.0 >= 0.8 and h - 40.0 >= 0.8, f"{w:.2f} x {h:.2f}")
+    pcb_lo = enc.OLED_POS[1] - enc.OLED_PCB[1] / 2
+    pcb_hi = enc.OLED_POS[1] + enc.OLED_PCB[1] / 2
+    check_true("OLED board fits between floor and deck",
+               pcb_lo - enc.BASE_FLOOR >= 1.0 and enc.TUB_H - pcb_hi >= 1.0,
+               f"z {pcb_lo:.1f}..{pcb_hi:.1f}, inside {enc.BASE_FLOOR:.1f}..{enc.TUB_H:.1f}")
+
+    print("\nOLED mount (QSJ M3 inserts from inside, board screws on from behind)")
+    oled_xz = {(round(x, 2), round(z, 2)) for x, z in enc.oled_hole_positions()}
+    oled_ins = [e for e in tub_y.get(round(enc.INSERT_HOLE_D, 2), [])
+                if e[1] < 0 and (round(e[0], 2), round(e[2], 2)) in oled_xz]
+    check_true("OLED insert holes, 4.2 mm", len(oled_ins) == 4, f"{len(oled_ins)} found")
+    if oled_ins:
+        xs = [e[0] for e in oled_ins]
+        zs = [e[2] for e in oled_ins]
+        check("OLED hole spacing, horizontal (measured)", max(xs) - min(xs), 66.0)
+        check("OLED hole spacing, vertical (measured)", max(zs) - min(zs), 44.0)
+        check("OLED insert hole depth", oled_ins[0][3], enc.OLED_INSERT_DEPTH)
+        hole_front = oled_ins[0][1] - oled_ins[0][3] / 2
+        skin = hole_front - (-enc.BASE_D / 2)
+        check_true("OLED insert holes stay blind (>= 1 mm skin outside)",
+                   skin >= 1.0 - 1e-6, f"{skin:.2f} mm")
+    check_true("OLED insert depth >= 4 mm insert", enc.OLED_INSERT_DEPTH >= 4.0)
+    gx, gz = enc.OLED_GLASS[0] / 2, enc.OLED_GLASS[1] / 2
+    hx, hz = enc.OLED_HOLE_PITCH[0] / 2, enc.OLED_HOLE_PITCH[1] / 2
+    corner = ((hx - gx) ** 2 + (hz - gz) ** 2) ** 0.5
+    check_true("OLED pads clear the glass corners", corner > enc.OLED_PAD_R,
+               f"{corner - enc.OLED_PAD_R:.2f} mm")
+    glass = enc.oled_board()
+    hit = (tub & glass).volume
+    check_true("OLED glass and board don't collide with the tub", hit < 0.01,
+               f"overlap {hit:.3f} mm3")
+    recess = enc.BASE_WALL + enc.OLED_PAD_H - enc.OLED_GLASS_H
+    print(f"  info  glass face sits {recess:.1f} mm behind the outer wall face")
+
+    print("\nOpaque shell thickness (base_tub)")
+    probes = {
+        "front wall": enc.Pos(0, -enc.BASE_D / 2, enc.TUB_H - 3) * enc.Box(
+            1, 12, 1, align=(enc.Align.CENTER, enc.Align.MIN, enc.Align.CENTER)),
+        "back wall": enc.Pos(0, enc.BASE_D / 2, enc.TUB_H - 3) * enc.Box(
+            1, 12, 1, align=(enc.Align.CENTER, enc.Align.MAX, enc.Align.CENTER)),
+        "left wall": enc.Pos(-enc.BASE_W / 2, 0, enc.TUB_H - 3) * enc.Box(
+            12, 1, 1, align=(enc.Align.MIN, enc.Align.CENTER, enc.Align.CENTER)),
+        "right wall": enc.Pos(enc.BASE_W / 2, 0, enc.TUB_H - 3) * enc.Box(
+            12, 1, 1, align=(enc.Align.MAX, enc.Align.CENTER, enc.Align.CENTER)),
+        "floor": enc.Pos(0, -20, 0) * enc.Box(
+            1, 1, 12, align=(enc.Align.CENTER, enc.Align.CENTER, enc.Align.MIN)),
+    }
+    for name, probe in probes.items():
+        check(f"{name} thickness (measured)", (tub & probe).volume, 5.0)
 
     print("\nRear panel (base_tub)")
     rear = [(d, e) for d, es in tub_y.items() for e in es if e[1] > 0 and d > 5]
@@ -141,6 +200,11 @@ def main() -> None:
     check_true("perfboard insert holes, 4.2 mm", len(perf_inserts) == 4, f"{len(perf_inserts)} found")
     for e in perf_inserts[:1]:
         check("perfboard insert hole depth", e[3], enc.STANDOFF_H)
+    if perf_inserts:
+        xs = [e[0] for e in perf_inserts]
+        ys = [e[1] for e in perf_inserts]
+        check("perfboard hole spacing, long side (measured)", max(xs) - min(xs), 67.0)
+        check("perfboard hole spacing, short side (measured)", max(ys) - min(ys), 47.0)
     boss_od = [d for d in tub_z if abs(d - 2 * enc.BOSS_R) < 0.01]
     check_true("corner boss OD 8 mm (1.5 mm wall round insert)", bool(boss_od))
 
@@ -168,6 +232,27 @@ def main() -> None:
     check_true("top countersinks 6.6 mm, opening on the top face",
                len(tcsk) == 4 and flush
                and all(abs(c - enc.SCREW_HEAD_D) < 0.05 for c in cone_top_diameters(top)))
+    print(f"\nTop plate relief (every style; building {enc.TOP_STYLE!r})")
+    keep = None
+    for x, y in enc.shade_boss_positions():
+        ring = enc.Pos(x, y, enc.SHADE_ZTOP) * enc.Cylinder(
+            enc.SCREW_HEAD_D / 2 + 1.0, enc.SHADE_CAP_T + 10, align=enc.BOTTOM)
+        keep = ring if keep is None else keep + ring
+    for style in enc.TOP_STYLES:
+        plate = top if style == enc.TOP_STYLE else enc.shade_top(style)
+        relief = enc.top_pattern(style)
+        rh = relief.bounding_box().size.Z
+        hit = (relief & keep).volume
+        printed = enc.print_pose("shade_top", plate)
+        bed = [f for f in printed.faces().filter_by(GeomType.PLANE)
+               if abs(f.center().Z) < 1e-3 and f.normal_at().Z < -0.99]
+        bed_share = sum(f.area for f in bed) / (enc.SHADE_W * enc.SHADE_D)
+        ok = (len(plate.solids()) == 1 and hit < 0.01 and 0 < rh <= 2.0 + 1e-6
+              and bed_share > 0.9)
+        check_true(f"{style}: one solid, low, clear of screws, prints face-up", ok,
+                   f"{len(plate.solids())} solid, relief {rh:.1f} mm, "
+                   f"screw overlap {hit:.2f} mm3, {bed_share:.0%} on bed")
+
     post_ins = holes(floor, "Z").get(round(enc.INSERT_HOLE_D, 2), [])
     check_true("post-top insert holes, 4.2 mm", xy_set(post_ins) == shade_xy,
                f"{len(post_ins)} found")
@@ -231,6 +316,41 @@ def main() -> None:
     big = max(max(p.bounding_box().size.X, p.bounding_box().size.Y)
               for p in (floor, top))
     check_true("largest shade part fits a 220 mm bed", big <= 220, f"{big:.0f} mm")
+
+    print("\nLED core (deck_core)")
+    core_z = enc.BASE_H + enc.CORE_H / 2
+    probes = {
+        "front": enc.Pos(0, -enc.CORE_D / 2, core_z) * enc.Box(
+            1, 10, 1, align=(enc.Align.CENTER, enc.Align.MIN, enc.Align.CENTER)),
+        "right": enc.Pos(enc.CORE_W / 2, 0, core_z) * enc.Box(
+            10, 1, 1, align=(enc.Align.MAX, enc.Align.CENTER, enc.Align.CENTER)),
+    }
+    for name, probe in probes.items():
+        check(f"core {name} wall thickness (measured)", (deck & probe).volume, 3.0)
+    wrap = enc.strip_wrap()
+    for end in ("head", "tail"):
+        wall, coord, z = wrap[end]
+        y = -enc.CORE_D / 2 if wall == "front" else enc.CORE_D / 2
+        sx, sz = [], []
+        for f in deck.faces().filter_by(GeomType.PLANE):
+            c = f.center()
+            if abs(abs(c.Y) - enc.CORE_D / 2 + enc.CORE_WALL / 2) > enc.CORE_WALL / 2 + 0.01:
+                continue
+            if abs(c.X - coord) > 10 or abs(c.Z - z) > 8 or c.Y * y < 0:
+                continue
+            n = f.normal_at()
+            if abs(n.X) > 0.99:
+                sx.append(c.X)
+            elif abs(n.Z) > 0.99:
+                sz.append(c.Z)
+        if sx and sz:
+            check(f"strip {end} slot width (measured)", max(sx) - min(sx), 15.0)
+            check(f"strip {end} slot height (measured)", max(sz) - min(sz), 10.0)
+            check_true(f"strip {end} slot clears deck and core top",
+                       min(sz) > enc.BASE_H + 1 and max(sz) < enc.BASE_H + enc.CORE_H - 1,
+                       f"z {min(sz):.1f}..{max(sz):.1f}")
+        else:
+            check_true(f"strip {end} slot found", False)
 
     print("\nShade fit over core")
     fbb = [f.bounding_box() for f in floor.faces().filter_by(GeomType.PLANE)

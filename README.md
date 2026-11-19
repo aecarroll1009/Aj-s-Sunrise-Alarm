@@ -103,11 +103,6 @@ CLAUDE.md               working notes for picking the project up in a new sessio
 - **Next:** hardware bring-up, starting at step 1 of `docs/BRING_UP.md`. No
   bring-up step has been run yet.
 - **Open items:**
-  - `DFPlayerDriver` calls `play(ALARM_TRACK)`, which plays the Nth file in
-    the order files were copied onto the card, not `/mp3/0001.mp3`. It works
-    if the song is the only file on the card. Switching to
-    `playMp3Folder(ALARM_TRACK)` (driver and `bringup/dfplayer_test`) would
-    make it play exactly `/mp3/0001.mp3`. Not changed yet.
   - The `TODO(hardware)` placeholders in `src/Config.h` (sunrise keyframes and
     duration, preset list, song track and volume) get tuned on the real lamp
     after bring-up.

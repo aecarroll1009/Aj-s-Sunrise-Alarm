@@ -14,7 +14,7 @@ below has been run yet.
   header: GND, VCC, SDA, SCL. Leave SQW and 32K unconnected.
 - microSD: 32 GB or smaller, FAT32 (or FAT16 for 2 GB and under). If it's a
   used or no-name card, run H2testw on it first. Create `mp3\0001.mp3` and
-  ideally put nothing else on the card (see step 6).
+  other files on the card are ignored.
 - Barrel jack: the supply's plug is 5.5×2.5 mm. Test-fit it in the panel jack
   before wiring; a 2.5 mm plug on a 2.1 mm pin is loose and can arc.
 
@@ -72,10 +72,11 @@ Do these in order. Don't move on until each one passes.
 6. DFPlayer. Upload `bringup/dfplayer_test` with `/mp3/0001.mp3` on the
    microSD. Confirm audio plays and the BUSY pin reads "playing". The speaker
    goes on SPK_1/SPK_2 (not DAC_L/DAC_R), and the 100 µF + 0.1 µF caps go at
-   the module. Note: the test sketch and the driver call `play(1)`, which plays
-   the first file in copy order anywhere on the card, not specifically
-   `/mp3/0001.mp3`. With the song as the only file it's the same thing; if the
-   wrong audio plays, switch both to `playMp3Folder(1)`.
+   the module. The test sketch and the driver both
+   play exactly `/mp3/0001.mp3` and start it again whenever BUSY goes idle,
+   so the song repeats until the alarm is snoozed or dismissed. Confirm the
+   serial output shows a new "start #" each time the song ends. BUSY must be
+   wired: with D9 floating it reads idle and the track restarts every second.
 7. All together. Disconnect USB, connect the brick to the 5V pin, flash the
    real firmware (over USB with the brick feed removed), then run it from
    the brick.

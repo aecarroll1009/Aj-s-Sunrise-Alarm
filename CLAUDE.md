@@ -11,8 +11,8 @@ checklist currently being worked through) and `cad/README.md` (enclosure).
 - All parts in hand. Hardware bring-up is next, starting at step 1 of
   `docs/BRING_UP.md`. Work through it one step at a time with Alex at the
   bench, and don't skip ahead until a step passes.
-- Open items are listed under Status in `README.md` (DFPlayer `play` vs
-  `playMp3Folder`, perfboard size mismatch in the CAD, `TODO(hardware)` tuning).
+- Open items are listed under Status in `README.md` (perfboard size mismatch
+  in the CAD, `TODO(hardware)` tuning).
 
 ## Hardware decisions made during parts selection
 - 1 m / 60-LED strip, not the spec's 2 m / 120. Worst-case draw is about 4 A

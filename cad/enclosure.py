@@ -10,7 +10,8 @@ Parts (each exported as a print-ready STEP to ``cad/to_print``):
     deck_core   opaque PLA, screws onto the tub; the core carries the strip.
     shade_floor translucent PLA, floor ring that locates on the core, with
                 four slim corner posts carrying inserts in their tops.
-    shade_top   translucent PLA, flat top plate screwed down into the posts;
+    shade_top   translucent PLA, top plate screwed down into the posts, with a
+                low textured relief on its top face (TOP_STYLE);
                 it clamps the panels against the floor.
     panel_*     translucent PLA, four plain flat side panels with raised
                 goldfish, held only by shallow recesses in the floor and top.
@@ -20,8 +21,8 @@ Fish placements come from ``cad/fish/layout.json`` when it lists a panel
 random layout.
 
 Every print file sits on the bed at Z = 0, centred on the origin, in its
-print orientation: panels lie flat with the fish up and the top plate is
-flipped so its visible face prints against the bed. ``cad/assembly`` gets one
+print orientation: panels lie flat with the fish up and the top plate lies
+face-up with its relief on top. ``cad/assembly`` gets one
 STEP with every part in its assembled position.
 
 Run:
@@ -57,9 +58,10 @@ FISH_LAYOUT_FILE = FISH_DIR / "layout.json"
 
 OUTER_SCALE = 1.1
 
-BASE_W, BASE_D, BASE_H = (OUTER_SCALE * v for v in (140.0, 80.0, 50.0))
-BASE_WALL = 3.0
-BASE_FLOOR = 3.0
+BASE_W, BASE_D = OUTER_SCALE * 140.0, OUTER_SCALE * 80.0
+BASE_H = 60.0
+BASE_WALL = 5.0
+BASE_FLOOR = 5.0
 DECK_T = 3.0
 TUB_H = BASE_H - DECK_T
 
@@ -87,6 +89,10 @@ FISH_TILT = 25.0
 FISH_SCALE = (0.7, 0.9)
 FISH_GAP = 3.0
 
+TOP_STYLES = ("frame", "pinstripe", "framed_reeds")
+TOP_STYLE = "pinstripe"
+TOP_SCREW_CLEAR = 1.5
+
 STRIP_LEN = 1000.0
 STRIP_W = 10.0
 STRIP_MARGIN = 3.0
@@ -97,23 +103,32 @@ CORE_W, CORE_D = OUTER_SCALE * 120.0, OUTER_SCALE * 60.0
 CORE_H = math.ceil(
     2 * STRIP_MARGIN + STRIP_W + STRIP_PITCH * STRIP_LEN / (2 * (CORE_W + CORE_D))
 )
-CORE_WALL = 2.0
-WIRE_SLOT_W, WIRE_SLOT_H = 10.0, 6.0
+CORE_WALL = 3.0
+WIRE_SLOT_W, WIRE_SLOT_H = 15.0, 10.0
 
 BOSS_R = 4.0
-BOSS_INSET = BASE_WALL + 3.5
+BOSS_INSET = 6.5
 INSERT_HOLE_D = 4.2
 INSERT_DEPTH = 6.0
 SCREW_CLEAR_D = 3.4
 SCREW_HEAD_D = 6.6
 
-OLED_WINDOW = (56.0, 29.0)
-OLED_PCB = (61.5, 39.5)
-OLED_POS = (OUTER_SCALE * 26.0, BASE_H / 2)
-ENCODER_HOLE_D = 8.4
-ENCODER_POS = (OUTER_SCALE * -28.0, BASE_H / 2)
-BUTTON_HOLE_D = 10.4
-BUTTON_POS = (OUTER_SCALE * -50.0, BASE_H / 2)
+FRONT_Z = (BASE_FLOOR + TUB_H) / 2
+OLED_GLASS = (60.0, 40.0)
+OLED_GLASS_H = 3.0
+OLED_WINDOW = (61.0, 41.0)
+OLED_PCB = (71.0, 49.0)
+OLED_POS = (OUTER_SCALE * 26.0, FRONT_Z)
+OLED_HOLE_PITCH = (66.0, 44.0)
+OLED_PAD_H = 0.5
+OLED_PAD_R = 3.2
+OLED_INSERT_DEPTH = 4.5
+ENCODER_HOLE_D = 7.4
+ENCODER_POS = (OUTER_SCALE * -28.0, FRONT_Z)
+ENCODER_POCKET_D = 20.0
+ENCODER_WALL = 3.0
+BUTTON_HOLE_D = 12.4
+BUTTON_POS = (OUTER_SCALE * -50.0, FRONT_Z)
 
 JACK_HOLE_D = 11.2
 JACK_POS = (OUTER_SCALE * 45.0, OUTER_SCALE * 20.0)
@@ -125,7 +140,7 @@ GRILLE_PITCH = 5.0
 PERF_SIZE = (70.0, 50.0)
 PERF_POS = (0.0, 10.0)
 PERF_T = 1.6
-PERF_HOLE_PITCH = (65.0, 45.0)
+PERF_HOLE_PITCH = (67.0, 47.0)
 STANDOFF_H = 6.0
 STANDOFF_R = 4.0
 
@@ -335,6 +350,13 @@ def perf_positions() -> list[tuple[float, float]]:
     return [(cx + sx * x, cy + sy * y) for sx in (-1, 1) for sy in (-1, 1)]
 
 
+def oled_hole_positions() -> list[tuple[float, float]]:
+    """Returns the XZ centres of the OLED board's four mounting holes."""
+    x, z = OLED_HOLE_PITCH[0] / 2, OLED_HOLE_PITCH[1] / 2
+    cx, cz = OLED_POS
+    return [(cx + sx * x, cz + sz * z) for sx in (-1, 1) for sz in (-1, 1)]
+
+
 def perfboard() -> Part:
     """Returns a stand-in for the perfboard, for previews only."""
     z = BASE_FLOOR + STANDOFF_H
@@ -342,9 +364,14 @@ def perfboard() -> Part:
 
 
 def oled_board() -> Part:
-    """Returns a stand-in for the OLED module behind its window, for previews."""
-    y = -BASE_D / 2 + BASE_WALL + 2.0
-    return Pos(OLED_POS[0], y, OLED_POS[1]) * Box(OLED_PCB[0], 4.0, OLED_PCB[1])
+    """Returns a stand-in for the OLED board and glass, for previews."""
+    x, z = OLED_POS
+    y = -BASE_D / 2 + BASE_WALL + OLED_PAD_H
+    pcb = Pos(x, y, z) * Box(OLED_PCB[0], PERF_T, OLED_PCB[1],
+                             align=(Align.CENTER, Align.MIN, Align.CENTER))
+    glass = Pos(x, y, z) * Box(OLED_GLASS[0], OLED_GLASS_H, OLED_GLASS[1],
+                               align=(Align.CENTER, Align.MAX, Align.CENTER))
+    return pcb + glass
 
 
 def strip_wrap() -> dict:
@@ -454,7 +481,19 @@ def base_tub() -> Part:
     tub -= Pos(OLED_POS[0], front_y, OLED_POS[1]) * Box(
         OLED_WINDOW[0], 20, OLED_WINDOW[1]
     )
+    seat_y = front_y + BASE_WALL + OLED_PAD_H
+    for x, z in oled_hole_positions():
+        tub += Pos(x, seat_y - OLED_PAD_H / 2, z) * Rot(90, 0, 0) * Cylinder(
+            OLED_PAD_R, OLED_PAD_H
+        )
+        tub -= Pos(x, seat_y - OLED_INSERT_DEPTH / 2, z) * Rot(90, 0, 0) * Cylinder(
+            INSERT_HOLE_D / 2, OLED_INSERT_DEPTH
+        )
     tub -= Pos(ENCODER_POS[0], front_y, ENCODER_POS[1]) * through_y(ENCODER_HOLE_D)
+    pocket = BASE_WALL - ENCODER_WALL
+    tub -= Pos(ENCODER_POS[0], front_y + BASE_WALL - pocket / 2, ENCODER_POS[1]) * (
+        through_y(ENCODER_POCKET_D, pocket)
+    )
     tub -= Pos(BUTTON_POS[0], front_y, BUTTON_POS[1]) * through_y(BUTTON_HOLE_D)
 
     rear_y = BASE_D / 2
@@ -484,7 +523,7 @@ def deck_core() -> Part:
     )
 
     wrap = strip_wrap()
-    slot = Box(WIRE_SLOT_W, 10, WIRE_SLOT_H)
+    slot = Box(WIRE_SLOT_W, 2 * CORE_WALL + 0.2, WIRE_SLOT_H)
     for wall, coord, z in (wrap["head"], wrap["tail"]):
         part -= wall_cutter(wall, coord, z, slot, CORE_W / 2, CORE_D / 2)
     return part
@@ -512,13 +551,84 @@ def shade_floor() -> Part:
     return floor
 
 
-def shade_top() -> Part:
-    """Builds the flat top plate that clamps the panels onto the floor.
+def top_block(cx: float, cy: float, sx: float, sy: float, h: float) -> Part:
+    """Returns a box of height h standing on the top plate's top face."""
+    return Pos(cx, cy, SHADE_ZTOP + SHADE_CAP_T) * Box(sx, sy, h, align=BOTTOM)
+
+
+def top_ring(inset: float, width: float, h: float) -> Part:
+    """Returns a rectangular band whose outer edge sits inset from the plate edge."""
+    outer = top_block(0, 0, SHADE_W - 2 * inset, SHADE_D - 2 * inset, h)
+    inner = top_block(0, 0, SHADE_W - 2 * (inset + width),
+                      SHADE_D - 2 * (inset + width), h)
+    return outer - inner
+
+
+def top_ribs(inset: float, pitch: float, width: float, h: float) -> Part:
+    """Returns evenly spaced front-to-back ribs filling an inset rectangle.
+
+    Args:
+        inset: Distance from the plate edge to the rectangle the ribs fill.
+        pitch: Centre-to-centre rib spacing.
+        width: Rib width.
+        h: Rib height.
+
+    Returns:
+        The ribs, centred side to side in the rectangle.
+    """
+    span_x, span_y = SHADE_W - 2 * inset, SHADE_D - 2 * inset
+    n = int((span_x - width) // pitch) + 1
+    start = -(n - 1) * pitch / 2
+    ribs = None
+    for i in range(n):
+        rib = top_block(start + i * pitch, 0, width, span_y, h)
+        ribs = rib if ribs is None else ribs + rib
+    return ribs
+
+
+def top_style_shapes(style: str) -> Part:
+    """Builds the raw relief for one TOP_STYLES entry, before screw clearance."""
+    if style == "frame":
+        return top_ring(0, 12.0, 1.2)
+    if style == "pinstripe":
+        return top_ring(14.0, 1.6, 0.8) + top_ring(19.0, 1.6, 0.8)
+    if style == "framed_reeds":
+        return top_ring(14.0, 2.0, 1.0) + top_ribs(22.0, 8.0, 1.6, 0.8)
+    raise ValueError(f"unknown TOP_STYLE {style!r}; pick one of {TOP_STYLES}")
+
+
+def top_pattern(style: str | None = None) -> Part:
+    """Builds the understated relief on the shade's top face.
+
+    Every style is low (2 mm or less) so it reads as texture: raised parts
+    are thicker plastic and show slightly darker when the lamp is lit. A
+    clearing is cut around each corner screw head so the screws stay flush.
+
+    Args:
+        style: One of TOP_STYLES; defaults to TOP_STYLE.
+
+    Returns:
+        The relief, ready to add to the plate.
+    """
+    relief = top_style_shapes(style or TOP_STYLE)
+    for x, y in shade_boss_positions():
+        relief -= Pos(x, y, SHADE_ZTOP) * Cylinder(
+            SCREW_HEAD_D / 2 + TOP_SCREW_CLEAR, SHADE_CAP_T + 10, align=BOTTOM)
+    return relief
+
+
+def shade_top(style: str | None = None) -> Part:
+    """Builds the top plate that clamps the panels onto the floor.
 
     Four countersunk M3 screws go down through it into the post tops; the
-    panels' top edges sit in a shallow recess in its underside.
+    panels' top edges sit in a shallow recess in its underside. The top face
+    carries the low relief from top_pattern.
+
+    Args:
+        style: One of TOP_STYLES; defaults to TOP_STYLE.
     """
     top = Pos(0, 0, SHADE_ZTOP) * Box(SHADE_W, SHADE_D, SHADE_CAP_T, align=BOTTOM)
+    top += top_pattern(style)
     for face in FACES:
         top -= panel_seat(face)
     for x, y in shade_boss_positions():
@@ -583,22 +693,31 @@ def print_pose(name: str, part: Part) -> Part:
     """
     if name.startswith("panel_"):
         part = panel_flat(name[len("panel_"):])
-    elif name == "shade_top":
-        part = Rot(180, 0, 0) * part
     bb = part.bounding_box()
     return Pos(-bb.center().X, -bb.center().Y, -bb.min.Z) * part
 
 
 def main() -> None:
-    """Builds all parts and writes print STEPs plus an assembly STEP."""
+    """Builds all parts and writes print STEPs plus an assembly STEP.
+
+    The top plate is exported once per TOP_STYLES entry as
+    ``shade_top_<style>.step``; they share the same screw holes and panel
+    recesses, so any one can be swapped onto the lamp. The assembly uses
+    TOP_STYLE.
+    """
     PRINT_DIR.mkdir(exist_ok=True)
     ASSEMBLY_DIR.mkdir(exist_ok=True)
     parts = build()
-    for name, part in parts.items():
-        printed = print_pose(name, part)
+    prints = {k: v for k, v in parts.items() if k != "shade_top"}
+    for style in TOP_STYLES:
+        prints[f"shade_top_{style}"] = shade_top(style)
+    (PRINT_DIR / "shade_top.step").unlink(missing_ok=True)
+    for name, part in prints.items():
+        pose = "shade_top" if name.startswith("shade_top") else name
+        printed = print_pose(pose, part)
         export_step(printed, str(PRINT_DIR / f"{name}.step"))
         bb = printed.bounding_box()
-        print(f"{name:12s} {bb.size.X:6.1f} x {bb.size.Y:6.1f} x {bb.size.Z:6.1f} mm"
+        print(f"{name:22s} {bb.size.X:6.1f} x {bb.size.Y:6.1f} x {bb.size.Z:6.1f} mm"
               f"  vol {part.volume / 1000:6.1f} cm3")
     assembly = Compound(label="ajs_sunrise_alarm", children=list(parts.values()))
     export_step(assembly, str(ASSEMBLY_DIR / "assembly.step"))

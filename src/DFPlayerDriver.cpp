@@ -21,11 +21,11 @@ void DFPlayerDriver::update(bool wantAudio) {
   if (wantAudio) {
     if (!playing_) {
       df_.volume(ALARM_VOLUME);
-      df_.play(ALARM_TRACK);  // /mp3/0001.mp3
+      df_.playMp3Folder(ALARM_TRACK);  // /mp3/0001.mp3
       playing_     = true;
       lastStartMs_ = now;
     } else if ((now - lastStartMs_) > MIN_PLAY_MS && !busy) {
-      df_.play(ALARM_TRACK);  // track ended but still wanted, so replay it
+      df_.playMp3Folder(ALARM_TRACK);  // track ended but still wanted, so replay it
       lastStartMs_ = now;
     }
   } else if (playing_) {

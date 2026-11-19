@@ -121,6 +121,53 @@ def fish_layout_plot(path) -> None:
     plt.close(fig)
 
 
+def top_options_sheet(parts, path) -> None:
+    """Renders every TOP_STYLES entry from several views and tiles them.
+
+    One row per style: the lamp from above, the lamp at bedside eye level, a
+    the plate at a low angle, and the plate overhead.
+
+    Args:
+        parts: The built parts; shade_top is swapped for each style.
+        path: Output PNG path for the labelled comparison sheet.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    folder = enc.RENDER_DIR / "top_options"
+    folder.mkdir(exist_ok=True)
+    z = enc.SHADE_ZTOP
+    views = (
+        ("lamp from above", "lamp", [(-170, -300, 330), (0, 0, 95), (0, 0, 1)]),
+        ("bedside eye level", "lamp", [(-60, -420, 190), (0, 0, 85), (0, 0, 1)]),
+        ("plate, low angle", "plate",
+         [(-150, -170, z + 70), (-55, -25, z), (0, 0, 1)]),
+        ("plate overhead", "plate", [(0, -140, z + 380), (0, 0, z), (0, 0, 1)]),
+    )
+    grid = []
+    for style in enc.TOP_STYLES:
+        top = enc.shade_top(style)
+        row = []
+        for label, subject, camera in views:
+            shown = dict(parts, shade_top=top) if subject == "lamp" else {"shade_top": top}
+            out = folder / f"{style}_{label.replace(' ', '_').replace(',', '')}.png"
+            render(out, shown, {}, camera, f"{style}: {label}", show_strip=False)
+            row.append((label, out))
+        grid.append((style, row))
+    fig, axes = plt.subplots(len(grid), len(views),
+                             figsize=(4.2 * len(views), 4.2 * len(grid)))
+    for r, (style, row) in enumerate(grid):
+        for c, (label, out) in enumerate(row):
+            ax = axes[r][c]
+            ax.axis("off")
+            ax.imshow(plt.imread(out)[70:950, 30:970])
+            ax.set_title(f"{style}  -  {label}", fontsize=12)
+    fig.tight_layout()
+    fig.savefig(path, dpi=90)
+    plt.close(fig)
+
+
 def main() -> None:
     """Renders assembled, rear, exploded and core-only views."""
     enc.RENDER_DIR.mkdir(exist_ok=True)
@@ -144,6 +191,29 @@ def main() -> None:
     render(enc.RENDER_DIR / "view_tub_inside.png", tub_only, {},
            [(-120, -200, 260), (0, 0, 20), (0, 0, 1)],
            "Base tub, perfboard on standoffs", show_strip=False)
+    base_mid = enc.BASE_H / 2
+    render(enc.RENDER_DIR / "view_base_front.png", {"base_tub": parts["base_tub"]}, {},
+           [(0, -600, base_mid), (0, 0, base_mid), (0, 0, 1)],
+           "Base front (head-on): button, encoder, OLED window",
+           show_strip=False, parallel=True)
+    front_half = parts["base_tub"] & enc.Pos(0, -enc.BASE_D / 4, 0) * enc.Box(
+        enc.BASE_W + 2, enc.BASE_D / 2, enc.BASE_H, align=(enc.Align.CENTER,
+                                                           enc.Align.CENTER,
+                                                           enc.Align.MIN))
+    inside = [(40, 260, 140), (0, -enc.BASE_D / 2, enc.FRONT_Z), (0, 0, 1)]
+    render(enc.RENDER_DIR / "view_front_wall_inside.png", {"base_tub": front_half}, {},
+           inside, "Front wall from inside: OLED insert pads, encoder pocket",
+           show_strip=False)
+    render(enc.RENDER_DIR / "view_front_wall_oled.png",
+           {"base_tub": front_half, "oled_board": enc.oled_board()}, {},
+           inside, "Front wall from inside, OLED board mounted", show_strip=False)
+    top_z = enc.SHADE_ZTOP
+    render(enc.RENDER_DIR / "view_top_plate.png", {"shade_top": parts["shade_top"]}, {},
+           [(0, 0, top_z + 600), (0, 0, top_z), (0, 1, 0)],
+           "Shade top plate from above (front at bottom)", show_strip=False,
+           parallel=True)
+    render(enc.RENDER_DIR / "view_top_angled.png", parts, {},
+           [(-200, -330, 420), (0, 0, 80), (0, 0, 1)], "Assembled, from above")
     shade = {k: parts[k] for k in ("shade_floor", "shade_top")}
     render(enc.RENDER_DIR / "view_shade_under.png", shade, {"shade_top": (0, 0, 25)},
            [(-160, -280, -170), (0, 0, 75), (0, 0, 1)],
@@ -155,6 +225,7 @@ def main() -> None:
                [eye, (0, 0, mid), (0, 0, 1)], f"{face.capitalize()} (head-on)",
                show_strip=False, parallel=True)
     fish_layout_plot(enc.RENDER_DIR / "view_fish_layout.png")
+    top_options_sheet(parts, enc.RENDER_DIR / "view_top_options.png")
 
 
 if __name__ == "__main__":

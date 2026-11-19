@@ -3,8 +3,9 @@
 Parametric 3D-printed enclosure: a rectangular "blocky mushroom" with an
 opaque electronics base, a rectangular LED core rising from the base deck, and
 a translucent shade box over the core. All dimensions live as constants at the
-top of `enclosure.py`. `OUTER_SCALE` (currently 1.1) scales the base, shade and
-core and where features sit; hole, insert, wall and screw sizes stay fixed.
+top of `enclosure.py`. `OUTER_SCALE` (currently 1.1) scales the base footprint,
+shade and core and where features sit; the base height, hole, insert, wall and
+screw sizes stay fixed.
 `python cad/enclosure.py` prints a clearance report after each build.
 
 | Part | Material | Notes |
@@ -12,7 +13,7 @@ core and where features sit; hole, insert, wall and screw sizes stay fixed.
 | `base_tub` | opaque PLA | electronics, OLED/encoder/button front, jack + speaker grille rear |
 | `deck_core` | opaque PLA | screws onto the tub (M3 countersunk into heat-set inserts); 1 m strip wraps the core |
 | `shade_floor` | translucent PLA | 3 mm floor that drops over the core, with four slim 8 mm corner posts (M3 insert in each top) and a 1.2 mm-deep recess for the panel bottoms. Print floor-down. |
-| `shade_top` | translucent PLA | flat 3 mm top plate with a matching recess underneath and four flush countersunk holes. |
+| `shade_top_frame` / `shade_top_pinstripe` / `shade_top_framed_reeds` | translucent PLA | 3 mm top plate with a matching recess underneath and four flush countersunk holes, in three interchangeable versions with a low relief on top (2 mm or less): `frame`, a 12 mm band 1.2 mm proud around the edge; `pinstripe`, two fine 0.8 mm lines inset from the edge; `framed_reeds`, a thin border with front-to-back ribs inside. All share the same screw holes and recesses, so any one can be unscrewed and swapped. `TOP_STYLE` picks the one used in the assembly and renders. Print face-up. |
 | `panel_front/right/back/left` | translucent PLA | plain flat 2 mm panels with 1.6 mm raised goldfish (eye is a hole down to the panel). No holes or screws. |
 
 Shade assembly: install 4 M3 inserts in the post tops, stand the four panels in
@@ -64,7 +65,7 @@ cd cad && /c/Users/PC/tools/cad-venv/Scripts/python.exe render.py
 
 | Folder | Contents |
 |---|---|
-| `to_print/` | one STEP per part, ready for the slicer: on the bed at Z = 0, in print orientation, no supports needed. Panels lie flat fish up; the top plate is flipped so its visible face prints on the bed. |
+| `to_print/` | one STEP per part, ready for the slicer: on the bed at Z = 0, in print orientation, no supports needed. Panels lie flat fish up; the top plate comes in three versions (one file per style), each face-up with its relief on top. |
 | `assembly/` | `assembly.step`, every part in its assembled position, for Fusion. |
 | `fish/` | the hand-placed fish layout: `fish_edit_<face>.step` edit files and `layout.json`. |
 | `renders/` | preview PNGs: front, rear, exploded, head-on sides, core with strip, tub inside, shade underside, and the fish outline plot. |
@@ -81,17 +82,26 @@ reprint only the affected part (usually `base_tub`).
 
 | Constant | Value | Check against |
 |---|---|---|
-| `OLED_WINDOW` | 56 x 29 mm | the 2.42" SSD1309's visible glass |
-| `OLED_PCB` | 61.5 x 39.5 mm | the OLED board (clearance report and previews only; no mount yet) |
-| `BUTTON_HOLE_D` | 10.4 mm | the soft-power button's 10 mm thread |
-| `JACK_HOLE_D` | 11.2 mm | the DC-099 5.5x2.5 mm panel jack (11 mm nominal) |
-| `PERF_SIZE` / `PERF_HOLE_PITCH` | 70 x 50 mm / 65 x 45 mm (pitch is a guess) | the perfboard you use and its corner holes |
+| `OLED_WINDOW` | 61 x 41 mm | the OLED glass, measured about 60 x 40 mm, which passes through the window |
+| `OLED_GLASS_H` | 3 mm | glass height above the OLED board; sets how far the glass sits behind the outer face (2.5 mm) |
+| `OLED_PCB` | 71 x 49 mm (estimated) | the OLED board outline (clearance report and previews only) |
+| `OLED_HOLE_PITCH` | 66 x 44 mm (measured) | the OLED board's mounting holes |
+| `BUTTON_HOLE_D` | 12.4 mm | the soft-power button's thread |
+| `ENCODER_HOLE_D` | 7.4 mm | the encoder's threaded bushing |
+| `JACK_HOLE_D` | 11.2 mm (fits) | the DC-099 5.5x2.5 mm panel jack |
+| `PERF_SIZE` / `PERF_HOLE_PITCH` | 70 x 50 mm / 67 x 47 mm (measured) | the perfboard and its corner holes |
 | speaker grille | sized for a 38 mm speaker | the 1.5" 4 ohm speaker |
 
-**Perfboard mismatch to resolve:** the CAD standoffs are placed for a 70x50
-board, but the parts checklist names the kit's 70x90 board with corner holes
-as the main board. Either use the 70x50 board from the kit, or update
-`PERF_SIZE`, `PERF_HOLE_PITCH` and `PERF_POS` and confirm it still clears the
-OLED and the corner bosses in the clearance report.
+The base walls and floor are 5 mm thick so the white PLA stays opaque; the
+extra thickness is on the inside, so the deck and shade are unchanged. The
+tub is 57 mm tall (60 mm with the deck) to fit the OLED board. The encoder
+sits in a 20 mm pocket on the inside face that leaves 3 mm of wall, so its
+short bushing still takes the nut.
 
-The OLED and speaker have no dedicated mounts yet.
+The LED core's walls are 3 mm thick (thickened inward, so the strip path is
+unchanged), and the strip's head and tail wires pass through 15 x 10 mm
+slots, wide enough for the strip's connectors.
+
+The OLED board screws on from inside: four M3 inserts go into the inside of
+the front wall at the board's holes, on 0.5 mm pads, and the glass passes
+into the window. The speaker has no dedicated mount yet.
