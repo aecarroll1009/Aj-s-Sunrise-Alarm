@@ -81,24 +81,25 @@ Do these in order. Don't move on until each one passes.
    real firmware (over USB with the brick feed removed), then run it from
    the brick.
 
-## After hardware works — fill in the `src/Config.h` placeholders (§4.12)
-These are marked `TODO(hardware)` in `src/Config.h`; tune them on the real lamp:
+## After hardware works — fill in the `src/Tuning.h` placeholders (§4.12)
+These are marked `TODO(hardware)` in `src/Tuning.h`; tune them on the real lamp:
 - Sunrise keyframes and duration — the RGBW waypoints and ramp length (§4.7).
   Watch the dim pre-dawn phase for visible stepping and adjust the early
   keyframes if it does.
 - Color preset list — final names (15 characters or fewer) and RGBW values (§4.4/4.6).
 - Song track and volume — `ALARM_TRACK` and `ALARM_VOLUME` (§3.6).
-- OLED driver — `OLED_DRIVER` defaults to the SSD1309 (§3.5). If the image is
-  shifted or garbled, try `U8G2_SSD1309_128X64_NONAME0_1_HW_I2C` in
-  `src/OledDriver.h`; for a different panel, set `OLED_DRIVER` to
-  `OLED_SSD1306` or `OLED_SH1106`.
+- OLED driver — `OLED_DRIVER` in `src/Pins.h` defaults to the SSD1309 (§3.5).
+  If the image is shifted or garbled, try
+  `U8G2_SSD1309_128X64_NONAME0_1_HW_I2C` in `src/OledDriver.h`; for a
+  different panel, set `OLED_DRIVER` to `OLED_SSD1306` or `OLED_SH1106`.
+  Screen layouts and fonts are in `src/Screens.cpp`.
 
 ## Correctness checks already in the firmware
 - The alarm triggers off the DS3231 hardware flag, not a time comparison.
-- The alarm time lives in the DS3231; armed, firedOnDate, preset, and
-  brightness live in EEPROM. Both survive power loss, and a reboot mid-alarm
-  resumes sounding.
-- The strip's `show()` only runs when a pixel changed, and never while audio
-  is playing — the light stays static at full brightness while the song plays.
+- The alarm time lives in the DS3231; armed, the day the alarm last ran,
+  preset and brightness live in EEPROM. Both survive power loss, and a reboot
+  mid-alarm resumes sounding.
+- The strip is only rewritten when its color changes (at most every 30 ms),
+  so the light stays static at full brightness while the song plays.
 - The OLED uses a page buffer, not a full framebuffer, and dims after being
   idle on HOME.

@@ -1,67 +1,52 @@
 #pragma once
 #include <stdint.h>
-#include "Config.h"
+#include "Pins.h"
 
-// Rotary encoder, encoder push, and soft-power button (spec 3.3-3.4).
-//
-// Encoder CLK/DT (D2/D3) are decoded in an ISR with a full-step state table
-// so mechanical bounce can't inject phantom counts; rotation accumulates as
-// signed detents. The encoder push (D4) is classified into short versus
-// long presses, and the soft-power button (D5) into single presses; both
-// are debounced, and both are INPUT_PULLUP and active-low. All events are
-// latched and consumed through the take*() methods.
-class InputDriver {
-public:
+// Rotary encoder, its push button, and the soft-power button (spec 3.3-3.4).
+
+// Input since the previous read().
+struct InputEvents {
+  int16_t rotation;    // signed detents
+  bool    shortPress;  // encoder button
+  bool    longPress;   // encoder button
+  bool    softPower;
+  bool    activity;    // any input, for waking the OLED
+};
+
+// A debounced, active-low push button.
+class Button {
+ public:
+  struct Events {
+    bool pressed;     // went down
+    bool shortPress;  // released before a long press
+    bool longPress;   // fires once per hold
+  };
+
+  explicit Button(uint8_t pin) : pin_(pin) {}
   void begin();
 
-  // Polls both buttons for debouncing and press classification. Call this
-  // once per loop iteration.
-  void poll();
+  // Returns what changed since the last call. Call once per frame.
+  Events poll(uint32_t nowMs);
 
-  // Returns the signed detent count accumulated since the last call, then
-  // resets it to zero.
-  int16_t takeRotation();
+ private:
+  uint8_t  pin_;
+  bool     lastRaw_ = false;
+  uint32_t lastEdgeMs_ = 0;
+  bool     down_ = false;
+  uint32_t downMs_ = 0;
+  bool     longSent_ = false;
+};
 
-  bool takeEncShort();
-  bool takeEncLong();
-  bool takeSoftPower();
+// Reads all inputs. The encoder is decoded in an interrupt; the buttons
+// are polled.
+class InputDriver {
+ public:
+  void begin();
 
-  // Returns whether any input happened since the last call, for OLED wake.
-  bool takeActivity();
+  // Returns input since the last call. Call once per frame.
+  InputEvents read();
 
-  // ISR trampoline; must be public and static for attachInterrupt.
-  static void isrEncoder();
-
-private:
-  void onEncoderEdge();
-
-  // Debounces and classifies the encoder push button (D4).
-  //
-  // Args:
-  //   now: current time, from millis().
-  void pollEncoderButton(uint32_t now);
-
-  // Debounces the soft-power button (D5).
-  //
-  // Args:
-  //   now: current time, from millis().
-  void pollSoftPower(uint32_t now);
-
-  // Encoder push (D4) debounce and classify state.
-  bool     encDown_{false};
-  uint32_t encDownMs_{0};
-  bool     encLongFired_{false};
-  bool     encLastRaw_{true};  // pulled-up idle is high (true)
-  uint32_t encEdgeMs_{0};
-
-  // Soft power (D5) state.
-  bool     pwrLastRaw_{true};
-  uint32_t pwrEdgeMs_{0};
-  bool     pwrStable_{true};
-
-  // Latched events, cleared by their take*() method.
-  bool encShort_{false};
-  bool encLong_{false};
-  bool softPwr_{false};
-  bool activity_{false};
+ private:
+  Button encoderButton_{PIN_ENC_SW};
+  Button powerButton_{PIN_SOFT_PWR};
 };

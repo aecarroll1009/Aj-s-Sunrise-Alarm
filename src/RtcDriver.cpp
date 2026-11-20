@@ -2,34 +2,24 @@
 
 namespace {
 
-// Converts a 12-hour time to 24-hour form. 12 AM maps to 0, 12 PM to 12.
-uint8_t to24(ClockHM t) {
-  uint8_t h = t.hour12 % 12;  // 12 -> 0
+// Returns the 24-hour hour of t (12 AM is 0).
+uint8_t hour24(ClockHM t) {
+  uint8_t h = t.hour12 % 12;
   return t.pm ? h + 12 : h;
 }
 
-// Converts a 24-hour time to 12-hour form.
-//
-// Args:
-//   h24: hour in 24-hour form, 0..23.
-//   minute: minute, passed through unchanged.
-// Returns:
-//   The equivalent 12-hour time.
+// Converts a 24-hour time to 12-hour.
 ClockHM from24(uint8_t h24, uint8_t minute) {
-  ClockHM t;
-  t.pm     = (h24 >= 12);
   uint8_t h = h24 % 12;
-  t.hour12 = (h == 0) ? 12 : h;
-  t.minute = minute;
-  return t;
+  return ClockHM{(uint8_t)(h == 0 ? 12 : h), minute, h24 >= 12};
 }
 
-} // namespace
+}  // namespace
 
 bool RtcDriver::begin() {
   if (!rtc_.begin()) return false;
   rtc_.disable32K();
-  rtc_.writeSqwPinMode(DS3231_OFF);  // INT/SQW is used for the alarm, not a square wave
+  rtc_.writeSqwPinMode(DS3231_OFF);
   rtc_.disableAlarm(2);
   rtc_.clearAlarm(1);
   rtc_.clearAlarm(2);
@@ -43,32 +33,31 @@ ClockHM RtcDriver::clock() {
 
 CalDate RtcDriver::date() {
   DateTime n = rtc_.now();
-  return CalDate{ (uint8_t)n.month(), (uint8_t)n.day(), (uint16_t)n.year() };
+  return CalDate{(uint8_t)n.month(), (uint8_t)n.day(), (uint16_t)n.year()};
 }
 
 void RtcDriver::setClock(ClockHM t, CalDate d) {
-  rtc_.adjust(DateTime(d.year, d.month, d.day, to24(t), t.minute, 0));
+  rtc_.adjust(DateTime(d.year, d.month, d.day, hour24(t), t.minute, 0));
 }
 
 void RtcDriver::setAlarm(ClockHM a) {
-  // Daily match on hours, minutes, and seconds; date fields are ignored in this mode.
+  // Hour-match mode ignores the date.
   rtc_.clearAlarm(1);
-  rtc_.setAlarm1(DateTime(2000, 1, 1, to24(a), a.minute, 0), DS3231_A1_Hour);
+  rtc_.setAlarm1(DateTime(2000, 1, 1, hour24(a), a.minute, 0), DS3231_A1_Hour);
 }
 
-ClockHM RtcDriver::getAlarm() {
+ClockHM RtcDriver::alarm() {
   DateTime a = rtc_.getAlarm1();
   return from24(a.hour(), a.minute());
 }
 
-bool RtcDriver::alarmFlagged()   { return rtc_.alarmFired(1); }
-void RtcDriver::clearAlarmFlag() { rtc_.clearAlarm(1); }
+bool RtcDriver::alarmFired()      { return rtc_.alarmFired(1); }
+void RtcDriver::clearAlarmFired() { rtc_.clearAlarm(1); }
 
-bool RtcDriver::alarmPassedToday(ClockHM a) {
+bool RtcDriver::alarmTimePassedToday() {
   DateTime n = rtc_.now();
-  int nowMin = n.hour() * 60 + n.minute();
-  int almMin = to24(a) * 60 + a.minute;
-  return nowMin >= almMin;
+  DateTime a = rtc_.getAlarm1();
+  return n.hour() * 60 + n.minute() >= a.hour() * 60 + a.minute();
 }
 
 uint32_t RtcDriver::todayKey() {

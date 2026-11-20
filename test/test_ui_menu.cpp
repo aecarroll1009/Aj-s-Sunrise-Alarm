@@ -1,6 +1,4 @@
-// Native (host g++) unit test for UIMenu — runs without any hardware.
-//
-//   g++ -std=c++11 -I. -Wall -Wextra UIMenu.cpp test/test_ui_menu.cpp -o test/run_ui && test/run_ui
+// Native unit test for UIMenu. Built and run by test/run_tests.sh.
 
 #include <cstdio>
 #include "../src/UIMenu.h"
@@ -17,7 +15,7 @@ using C = UIMenu::Cmd;
 
 static UIMenu freshAtMenu(uint8_t item) {
   UIMenu ui;
-  ui.seed(ClockHM{6, 30, false}, true, 0, ClockHM{10, 42, false}, CalDate{7, 2, 2026});
+  ui.load(ClockHM{6, 30, false}, true, 0); ui.setNow(ClockHM{10, 42, false}, CalDate{7, 2, 2026});
   ui.onShort();                       // HOME -> MENU
   for (uint8_t i = 0; i < item; ++i) ui.onRotate(1, false);
   return ui;
@@ -26,10 +24,10 @@ static UIMenu freshAtMenu(uint8_t item) {
 int main() {
   printf("UIMenu tests\n");
 
-  // --- HOME ---------------------------------------------------------------
+  // HOME.
   {
     UIMenu ui;
-    ui.seed(ClockHM{6, 30, false}, true, 0, ClockHM{10, 42, false}, CalDate{7, 2, 2026});
+    ui.load(ClockHM{6, 30, false}, true, 0); ui.setNow(ClockHM{10, 42, false}, CalDate{7, 2, 2026});
     CHECK(ui.screen() == S::HOME, "boots on HOME");
     UIMenu::Result off = ui.onRotate(3, false);
     CHECK(off.cmd == C::NONE, "rotate on HOME with lamp OFF does nothing");
@@ -40,7 +38,7 @@ int main() {
     CHECK(ui.screen() == S::MENU, "short on HOME opens MENU");
   }
 
-  // --- MENU navigation + Alarm toggle + Exit ------------------------------
+  // MENU navigation + Alarm toggle + Exit.
   {
     UIMenu ui = freshAtMenu(UIMenu::MI_SET_ALARM);
     ui.onRotate(-1, false);
@@ -57,7 +55,7 @@ int main() {
     CHECK(ex.screen() == S::HOME, "Exit returns to HOME");
   }
 
-  // --- SET ALARM: the navigating/editing chain (spec SS 4.5) --------------
+  // SET ALARM: the navigating/editing chain (spec 4.5).
   {
     UIMenu ui = freshAtMenu(UIMenu::MI_SET_ALARM);
     ui.onShort();                      // enter Set Alarm
@@ -74,38 +72,37 @@ int main() {
     CHECK(ui.onCancelField() && ui.mode() == M::NAVIGATING, "short -> lands on [Cancel] navigating");
   }
 
-  // --- SET ALARM: [Cancel] discards, committed value untouched ------------
+  // SET ALARM: [Cancel] discards, committed value untouched.
   {
     UIMenu ui = freshAtMenu(UIMenu::MI_SET_ALARM);
     ui.onShort();                      // Set Alarm, HH navigating
     ui.onShort();                      // HH editing
     ui.onRotate(5, false);             // 6 -> 11
     CHECK(ui.alarmEdit().hour12 == 11, "editing HH: rotate changes the working hour");
-    // advance to Cancel and confirm it
     ui.onShort(); ui.onShort(); ui.onShort();   // MM, AMPM, Cancel
     CHECK(ui.onCancelField(), "reached Cancel");
     ui.onShort();                      // confirm Cancel -> discard
     CHECK(ui.screen() == S::MENU, "Cancel exits to MENU");
-    CHECK(ui.committedAlarm().hour12 == 6, "discard leaves committed alarm unchanged (still 6)");
+    CHECK(ui.alarm().hour12 == 6, "discard leaves committed alarm unchanged (still 6)");
   }
 
-  // --- SET ALARM: long-press saves all ------------------------------------
+  // SET ALARM: long-press saves all.
   {
     UIMenu ui = freshAtMenu(UIMenu::MI_SET_ALARM);
     ui.onShort();                      // Set Alarm
     ui.onShort();                      // HH editing
     ui.onRotate(1, false);             // 6 -> 7
     UIMenu::Result r = ui.onLong();
-    CHECK(r.cmd == C::COMMIT_ALARM && r.alarm.hour12 == 7, "long-press emits COMMIT_ALARM with edited value");
-    CHECK(ui.committedAlarm().hour12 == 7 && ui.screen() == S::MENU, "save updates committed + exits");
+    CHECK(r.cmd == C::SAVE_ALARM && r.alarm.hour12 == 7, "long-press emits SAVE_ALARM with edited value");
+    CHECK(ui.alarm().hour12 == 7 && ui.screen() == S::MENU, "save updates committed + exits");
   }
 
-  // --- value wraps --------------------------------------------------------
+  // Value wraps.
   {
-    UIMenu ui;                         // seed the committed alarm at 12:00 directly
-    ui.seed(ClockHM{12, 0, false}, true, 0, ClockHM{12, 0, false}, CalDate{7, 2, 2026});
-    ui.onShort();                      // HOME -> MENU (index 0 = Set Alarm)
-    ui.onShort();                      // enter Set Alarm (working copy = 12:00)
+    UIMenu ui;
+    ui.load(ClockHM{12, 0, false}, true, 0); ui.setNow(ClockHM{12, 0, false}, CalDate{7, 2, 2026});
+    ui.onShort();                      // HOME -> MENU
+    ui.onShort();                      // Set Alarm at 12:00
     ui.onShort();                      // HH editing
     ui.onRotate(1, false);             // 12 -> 1
     CHECK(ui.alarmEdit().hour12 == 1, "HH 12 +1 wraps to 1");
@@ -118,12 +115,11 @@ int main() {
     CHECK(ui.alarmEdit().pm == !pm0, "AM/PM toggles");
   }
 
-  // --- SET TIME: longer chain + year wrap ---------------------------------
+  // SET TIME: longer chain + year wrap.
   {
     UIMenu ui = freshAtMenu(UIMenu::MI_SET_TIME);
-    ui.onShort();                      // enter Set Time (seeded from live clock)
+    ui.onShort();                      // enter Set Time
     CHECK(ui.screen() == S::SET_TIME, "enter Set Time");
-    // chain: HH MM AMPM MONTH DAY YEAR then Cancel (7 fields)
     ui.onShort();                      // HH editing
     for (int i = 0; i < 4; ++i) ui.onShort();   // -> MM AMPM MONTH DAY editing
     CHECK(ui.cursor() == 4 && ui.mode() == M::EDITING, "chained into DAY editing");
@@ -135,13 +131,13 @@ int main() {
     CHECK(ui.onCancelField() && ui.mode() == M::NAVIGATING, "Set Time lands on Cancel after YEAR");
 
     UIMenu::Result r = ui.onLong();
-    CHECK(r.cmd == C::COMMIT_TIME && r.date.year == 2025, "Set Time long-press emits COMMIT_TIME");
+    CHECK(r.cmd == C::SAVE_TIME && r.date.year == 2025, "Set Time long-press emits COMMIT_TIME");
   }
 
-  // --- COLOR PRESET: inverted grammar (spec SS 4.6) -----------------------
+  // COLOR PRESET: inverted grammar (spec 4.6).
   {
     UIMenu ui;
-    ui.seed(ClockHM{6, 30, false}, true, /*preset*/ 2, ClockHM{10, 42, false}, CalDate{7, 2, 2026});
+    ui.load(ClockHM{6, 30, false}, true, /*preset*/ 2); ui.setNow(ClockHM{10, 42, false}, CalDate{7, 2, 2026});
     ui.onShort();                                   // MENU
     for (int i = 0; i < UIMenu::MI_COLOR_PRESET; ++i) ui.onRotate(1, false);
     ui.onShort();                                   // enter Color Preset
@@ -149,27 +145,26 @@ int main() {
     CHECK(ui.presetCursor() == 2, "picker starts on the committed preset");
 
     UIMenu::Result prev = ui.onRotate(1, false);
-    CHECK(prev.cmd == C::PREVIEW_PRESET && prev.preset == 3, "rotate previews live (next preset)");
+    CHECK(prev.cmd == C::NONE && ui.presetCursor() == 3, "rotate moves the preview, saves nothing");
 
-    UIMenu::Result cancel = ui.onShort();           // short = cancel/revert
-    CHECK(cancel.cmd == C::PREVIEW_PRESET && cancel.preset == 2, "short reverts strip to entry preset");
+    UIMenu::Result cancel = ui.onShort();           // short = leave without saving
+    CHECK(cancel.cmd == C::NONE, "short saves nothing");
     CHECK(ui.screen() == S::MENU, "cancel exits to MENU");
 
-    // re-enter and save with long-press
-    for (int i = 0; i < UIMenu::MI_COLOR_PRESET; ++i) {} // already on Color Preset item
     ui.onShort();                                   // enter Color Preset again
+    CHECK(ui.presetCursor() == 2, "after cancel the picker starts on the saved preset again");
     ui.onRotate(2, false);                           // preview preset 4
     UIMenu::Result save = ui.onLong();
-    CHECK(save.cmd == C::COMMIT_PRESET && save.preset == 4, "long-press commits the previewed preset");
+    CHECK(save.cmd == C::SAVE_PRESET && save.preset == 4, "long-press commits the previewed preset");
   }
 
-  // --- alarm fires mid-edit -> abort, nothing committed -------------------
+  // Alarm fires mid-edit -> abort, nothing committed.
   {
     UIMenu ui = freshAtMenu(UIMenu::MI_SET_ALARM);
     ui.onShort(); ui.onShort(); ui.onRotate(9, false);   // deep in an edit
     ui.abortToHome();
     CHECK(ui.screen() == S::HOME, "abortToHome returns to HOME");
-    CHECK(ui.committedAlarm().hour12 == 6, "aborted edit commits nothing");
+    CHECK(ui.alarm().hour12 == 6, "aborted edit commits nothing");
   }
 
   printf("\n%s (%d failure%s)\n", failures ? "FAILURES" : "ALL PASS",

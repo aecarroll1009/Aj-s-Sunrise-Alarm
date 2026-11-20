@@ -19,7 +19,7 @@ checklist currently being worked through) and `cad/README.md` (enclosure).
   total, so the 5 V / 8 A supply and 5 A fuse need no firmware current cap.
 - RTC is a ZS-042 DS3231 board with its charging resistor removed; plain
   CR2032. Its EEPROM shows up at 0x57 on the I²C scan.
-- OLED is a 2.42" SSD1309 (`OLED_DRIVER` in `src/Config.h`).
+- OLED is a 2.42" SSD1309 (`OLED_DRIVER` in `src/Pins.h`).
 - Soft-power button must be momentary normally-open: the firmware reacts to a
   press edge and treats LOW on D5 as pressed. Arming is a menu item, not a
   switch.
@@ -36,9 +36,13 @@ checklist currently being worked through) and `cad/README.md` (enclosure).
 - The original spec is the scanned PDF one folder up from the repo.
 
 ## Conventions
-- Pure-logic modules (`SunriseCurve`, `LightEngine`, `AlarmSequence`,
-  `UIMenu`) make no Arduino calls and are covered by `test/`. Hardware access
-  stays in the `*Driver` and `Persistence` adapters.
+- Pure-logic modules (`Lamp`, `AlarmSequence`, `SunriseCurve`, `UIMenu`)
+  make no Arduino calls and are covered by `test/`. Hardware access stays in
+  the `*Driver`, `Screens` and `Persistence` modules. Keep the include graph
+  in the README's Firmware architecture section true: pure logic never
+  includes `Pins.h` or a driver, drivers never include each other or pure
+  logic (the OLED side reads `UIMenu`), and a constant used by one module
+  lives in that module's `.cpp`.
 - Google-style docstrings, few inline comments, and comments that describe
   the code as it is rather than its history.
 - Git: prepare commit and push commands for Alex rather than running them,

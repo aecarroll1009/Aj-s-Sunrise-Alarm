@@ -1,32 +1,22 @@
 #include "StripDriver.h"
 
 namespace {
-
-// Returns whether two colors are identical in all four channels.
-bool sameColor(const Rgbw& a, const Rgbw& b) {
-  return a.r == b.r && a.g == b.g && a.b == b.b && a.w == b.w;
-}
-
-} // namespace
+constexpr uint16_t MIN_WRITE_INTERVAL_MS = 30;
+}  // namespace
 
 void StripDriver::begin() {
   strip_.begin();
   strip_.clear();
-  strip_.show();  // start dark
-  last_  = Rgbw{0, 0, 0, 0};
-  dirty_ = false;
-}
-
-void StripDriver::setAll(Rgbw c) {
-  if (sameColor(c, last_)) return;  // unchanged: stay clean, skip show()
-  uint32_t packed = strip_.Color(c.r, c.g, c.b, c.w);
-  for (uint16_t i = 0; i < LED_COUNT; ++i) strip_.setPixelColor(i, packed);
-  last_  = c;
-  dirty_ = true;
-}
-
-void StripDriver::render() {
-  if (!dirty_) return;
   strip_.show();
-  dirty_ = false;
+  shown_ = Rgbw{0, 0, 0, 0};
+}
+
+void StripDriver::show(Rgbw c, uint32_t nowMs) {
+  if (c == shown_) return;
+  if (nowMs - lastWriteMs_ < MIN_WRITE_INTERVAL_MS) return;  // retry next frame
+
+  strip_.fill(strip_.Color(c.r, c.g, c.b, c.w));
+  strip_.show();
+  shown_ = c;
+  lastWriteMs_ = nowMs;
 }

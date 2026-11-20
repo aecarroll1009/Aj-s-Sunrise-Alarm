@@ -1,9 +1,13 @@
 #include "InputDriver.h"
 #include <Arduino.h>
 
-// Encoder decode: full-step state table (Ben Buxton's design).
 namespace {
 
+constexpr uint8_t  DEBOUNCE_MS   = 10;
+constexpr uint16_t LONG_PRESS_MS = 600;
+
+// Ben Buxton's full-step encoder table. Contact bounce never completes a
+// step, so it can't add phantom detents.
 constexpr uint8_t R_START     = 0x0;
 constexpr uint8_t R_CW_FINAL  = 0x1;
 constexpr uint8_t R_CW_BEGIN  = 0x2;
@@ -14,7 +18,7 @@ constexpr uint8_t R_CCW_NEXT  = 0x6;
 constexpr uint8_t DIR_CW      = 0x10;
 constexpr uint8_t DIR_CCW     = 0x20;
 
-const uint8_t TTABLE[7][4] = {
+const uint8_t STATE_TABLE[7][4] = {
   {R_START,    R_CW_BEGIN,  R_CCW_BEGIN, R_START},
   {R_CW_NEXT,  R_START,     R_CW_FINAL,  R_START | DIR_CW},
   {R_CW_NEXT,  R_CW_BEGIN,  R_START,     R_START},
@@ -24,77 +28,74 @@ const uint8_t TTABLE[7][4] = {
   {R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START},
 };
 
-volatile uint8_t g_state = R_START;
-volatile int16_t g_accum = 0;  // signed detents, drained by takeRotation()
-InputDriver*     g_self  = nullptr;
+volatile uint8_t encoderState = R_START;
+volatile int16_t detents = 0;
 
-} // namespace
-
-void InputDriver::isrEncoder() {
-  if (g_self) g_self->onEncoderEdge();
+// Interrupt handler for CLK and DT edges.
+void onEncoderEdge() {
+  uint8_t pins = (uint8_t)((digitalRead(PIN_ENC_DT) << 1) | digitalRead(PIN_ENC_CLK));
+  encoderState = STATE_TABLE[encoderState & 0x0f][pins];
+  uint8_t dir = encoderState & 0x30;
+  if (dir == DIR_CW) ++detents;
+  else if (dir == DIR_CCW) --detents;
 }
 
-void InputDriver::onEncoderEdge() {
-  uint8_t pinstate = (uint8_t)((digitalRead(PIN_ENC_DT) << 1) | digitalRead(PIN_ENC_CLK));
-  g_state = TTABLE[g_state & 0x0f][pinstate];
-  uint8_t dir = g_state & 0x30;
-  if (dir == DIR_CW)  ++g_accum;
-  else if (dir == DIR_CCW) --g_accum;
+// Returns detents since the last call and resets the count.
+int16_t takeDetents() {
+  noInterrupts();
+  int16_t n = detents;
+  detents = 0;
+  interrupts();
+  return n;
+}
+
+}  // namespace
+
+void Button::begin() { pinMode(pin_, INPUT_PULLUP); }
+
+Button::Events Button::poll(uint32_t nowMs) {
+  Events e{false, false, false};
+  bool raw = (digitalRead(pin_) == LOW);
+  if (raw != lastRaw_) {
+    lastRaw_ = raw;
+    lastEdgeMs_ = nowMs;
+  }
+  if (nowMs - lastEdgeMs_ < DEBOUNCE_MS) return e;
+
+  if (raw && !down_) {
+    down_ = true;
+    downMs_ = nowMs;
+    longSent_ = false;
+    e.pressed = true;
+  } else if (!raw && down_) {
+    down_ = false;
+    e.shortPress = !longSent_;
+  } else if (down_ && !longSent_ && nowMs - downMs_ >= LONG_PRESS_MS) {
+    longSent_ = true;
+    e.longPress = true;
+  }
+  return e;
 }
 
 void InputDriver::begin() {
   pinMode(PIN_ENC_CLK, INPUT_PULLUP);
-  pinMode(PIN_ENC_DT,  INPUT_PULLUP);
-  pinMode(PIN_ENC_SW,  INPUT_PULLUP);
-  pinMode(PIN_SOFT_PWR, INPUT_PULLUP);
-  g_self = this;
-  attachInterrupt(digitalPinToInterrupt(PIN_ENC_CLK), isrEncoder, CHANGE);
-  attachInterrupt(digitalPinToInterrupt(PIN_ENC_DT),  isrEncoder, CHANGE);
+  pinMode(PIN_ENC_DT, INPUT_PULLUP);
+  encoderButton_.begin();
+  powerButton_.begin();
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC_CLK), onEncoderEdge, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(PIN_ENC_DT), onEncoderEdge, CHANGE);
 }
 
-int16_t InputDriver::takeRotation() {
-  noInterrupts();
-  int16_t v = g_accum;
-  g_accum = 0;
-  interrupts();
-  if (v != 0) activity_ = true;
-  return v;
-}
-
-void InputDriver::poll() {
+InputEvents InputDriver::read() {
   const uint32_t now = millis();
-  pollEncoderButton(now);
-  pollSoftPower(now);
+  Button::Events enc = encoderButton_.poll(now);
+  Button::Events pwr = powerButton_.poll(now);
+
+  InputEvents e;
+  e.rotation   = takeDetents();
+  e.shortPress = enc.shortPress;
+  e.longPress  = enc.longPress;
+  e.softPower  = pwr.pressed;
+  e.activity   = e.rotation != 0 || enc.pressed || enc.longPress || e.softPower;
+  return e;
 }
-
-void InputDriver::pollEncoderButton(uint32_t now) {
-  bool encRaw = (digitalRead(PIN_ENC_SW) == LOW);  // pressed reads low
-  if (encRaw != encLastRaw_) { encLastRaw_ = encRaw; encEdgeMs_ = now; }
-  if ((now - encEdgeMs_) < DEBOUNCE_MS) return;
-
-  if (encRaw && !encDown_) {
-    // Debounced press.
-    encDown_ = true; encDownMs_ = now; encLongFired_ = false; activity_ = true;
-  } else if (!encRaw && encDown_) {
-    // Debounced release.
-    encDown_ = false;
-    if (!encLongFired_) encShort_ = true;  // released before the long-press threshold
-  } else if (encRaw && encDown_ && !encLongFired_ &&
-             (now - encDownMs_) >= LONG_PRESS_MS) {
-    encLong_ = true; encLongFired_ = true;  // fire long once while still held
-  }
-}
-
-void InputDriver::pollSoftPower(uint32_t now) {
-  bool pwrRaw = (digitalRead(PIN_SOFT_PWR) == LOW);
-  if (pwrRaw != pwrLastRaw_) { pwrLastRaw_ = pwrRaw; pwrEdgeMs_ = now; }
-  if ((now - pwrEdgeMs_) < DEBOUNCE_MS || pwrRaw == pwrStable_) return;
-
-  pwrStable_ = pwrRaw;
-  if (pwrRaw) { softPwr_ = true; activity_ = true; }  // register on the press edge
-}
-
-bool InputDriver::takeEncShort()  { bool v = encShort_; encShort_ = false; return v; }
-bool InputDriver::takeEncLong()   { bool v = encLong_;  encLong_  = false; return v; }
-bool InputDriver::takeSoftPower() { bool v = softPwr_;  softPwr_  = false; return v; }
-bool InputDriver::takeActivity()  { bool v = activity_; activity_ = false; return v; }

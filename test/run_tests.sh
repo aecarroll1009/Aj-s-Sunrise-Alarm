@@ -27,7 +27,7 @@ build_run() {
 }
 
 build_run run_sunrise src/SunriseCurve.cpp                 test/test_sunrise_curve.cpp
-build_run run_light   src/LightEngine.cpp                  test/test_light_engine.cpp
+build_run run_lamp    src/Lamp.cpp                         test/test_lamp.cpp
 build_run run_alarm   src/AlarmSequence.cpp src/SunriseCurve.cpp test/test_alarm_sequence.cpp
 build_run run_ui      src/UIMenu.cpp                       test/test_ui_menu.cpp
 

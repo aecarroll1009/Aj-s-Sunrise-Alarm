@@ -23,7 +23,7 @@ Firmware for an Arduino Nano (ATmega328P). Built as a non-blocking state machine
 | Momentary pushbutton, normally open, 10 mm panel mount | soft power: lamp on/off and alarm dismiss. Must be momentary N.O.; a latching or N.C. switch won't work. |
 | 5 V / 8 A supply (ALITOVE), 5.5×2.5 panel jack, 5 A inline blade fuse, power injection at both strip ends | see `docs/BRING_UP.md` |
 
-Full pin map is in `src/Config.h`; wiring and power notes are in `docs/BRING_UP.md`.
+Full pin map is in `src/Pins.h`; wiring and power notes are in `docs/BRING_UP.md`.
 The 3D-printed enclosure is in `cad/`. The original spec is the scanned PDF one
 folder up (`..\AJ's Sunrise Alarm B_W Scan.pdf`).
 
@@ -33,22 +33,44 @@ fuse have headroom and the firmware needs no current cap.
 
 ## Firmware architecture
 
-Pure logic is split from hardware so the state machines can be unit-tested
-natively (no board required):
+The behavior lives in pure-logic modules that make no Arduino calls, so they
+run and are tested on the PC. The drivers only talk to hardware, and the
+sketch connects the two.
 
-- Pure logic (`SunriseCurve`, `LightEngine`, `AlarmSequence`, `UIMenu`) —
-  no Arduino calls; exercised by a host g++ test harness.
-- Hardware adapters (`StripDriver`, `OledDriver`, `RtcDriver`,
-  `DFPlayerDriver`, `InputDriver`, `Persistence`) — thin wrappers over the
-  libraries.
-- `AJs_Sunrise_Alarm.ino` — wires them into the main loop.
+```
+                      AJs_Sunrise_Alarm.ino
+                 (reads inputs, applies results)
+          /                    |                     \
+  pure logic               drivers                display
+  Lamp                     InputDriver            OledDriver
+  AlarmSequence            RtcDriver                 |
+    -> SunriseCurve        StripDriver             Screens
+  UIMenu                   DFPlayerDriver            |
+                           Persistence             UIMenu (read only)
+          \                    |
+   Tuning.h, Types.h      Pins.h, Types.h (+ Tuning.h in a few .cpp files)
+```
+
+- `Types.h`: `Rgbw`, `ClockHM`, `CalDate`. Includes nothing else.
+- `Pins.h`: wiring and part choices (pin map, LED count, OLED controller).
+  Only drivers include it; pure logic never does.
+- `Tuning.h`: values to adjust on the finished lamp (sunrise keyframes and
+  duration, color presets, song and volume, brightness, snooze length).
+- Constants that only one module uses (debounce, long-press time, OLED idle
+  timeout, strip write interval) live inside that module's `.cpp`.
+
+Each frame, `loop()` reads the inputs, starts the alarm if the DS3231 flag
+says so, sends the input to either the alarm or the menu, then updates the
+strip, display and audio. Menu handlers return a `UIMenu::Result` saying what
+to save; the sketch applies it to the lamp, RTC or EEPROM.
 
 Key design guarantees:
 - The alarm triggers off the DS3231 hardware flag, not a time comparison.
-- Armed, firedOnDate, preset, and brightness persist to EEPROM, so the alarm
-  survives power loss; a reboot mid-alarm resumes sounding.
+- The alarm time lives in the DS3231; armed, the day the alarm last ran,
+  preset and brightness live in EEPROM. A reboot during an alarm resumes it.
 - The OLED uses a page buffer, not a full framebuffer, to fit the 2 KB SRAM.
-- The LED `show()` never runs while audio is playing.
+- The strip is only rewritten when its color changes, so it never interrupts
+  the song.
 
 ## Build
 
@@ -80,12 +102,20 @@ substitution".
 ```
 AJs_Sunrise_Alarm.ino   main sketch (non-blocking loop); includes from src/
 src/                    firmware modules
-  Config.h                pin map + hardware tunables/placeholders
-  SunriseCurve.*          fixed wake-up light ramp        (pure)
-  LightEngine.*           lamp state + alarm override     (pure)
-  AlarmSequence.*         wake state machine              (pure)
-  UIMenu.*                screen/menu/field-edit machine  (pure)
-  *Driver.* / Persistence.*  hardware adapters
+  Types.h                 shared value types
+  Pins.h                  pin map and part choices
+  Tuning.h                values to adjust on the lamp (TODO(hardware))
+  Lamp.*                  manual lamp: on/off, preset, brightness  (pure)
+  AlarmSequence.*         wake-up state machine                    (pure)
+  SunriseCurve.*          sunrise light ramp                       (pure)
+  UIMenu.*                screens, menu and value editors          (pure)
+  InputDriver.*           encoder and buttons
+  RtcDriver.*             DS3231 clock and alarm
+  StripDriver.*           SK6812 strip
+  DFPlayerDriver.*        wake song
+  Persistence.*           EEPROM settings
+  OledDriver.*            OLED panel and idle sleep
+  Screens.*               what each OLED screen draws
 test/                   native unit tests + run_tests.sh
 bringup/                standalone hardware diagnostic sketches
 docs/BRING_UP.md        bench checklist for assembly + tuning
@@ -95,14 +125,15 @@ CLAUDE.md               working notes for picking the project up in a new sessio
 
 ## Status (2026-11-18)
 
-- **Firmware:** complete. Compiles for the Nano (about 90% flash, about
-  900 B SRAM free) and all four native test suites pass.
+- **Firmware:** complete, and simplified on 2026-11-19 (see Firmware
+  architecture). Compiles for the Nano (87% flash, about 870 B SRAM free)
+  and all four native test suites pass. Not yet run on hardware.
 - **Enclosure:** printed from `cad/to_print/`. Fit against the real parts has
   not been checked yet (see `cad/README.md`).
 - **Parts:** all in hand.
 - **Next:** hardware bring-up, starting at step 1 of `docs/BRING_UP.md`. No
   bring-up step has been run yet.
 - **Open items:**
-  - The `TODO(hardware)` placeholders in `src/Config.h` (sunrise keyframes and
+  - The `TODO(hardware)` placeholders in `src/Tuning.h` (sunrise keyframes and
     duration, preset list, song track and volume) get tuned on the real lamp
     after bring-up.

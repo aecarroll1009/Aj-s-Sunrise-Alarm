@@ -1,8 +1,7 @@
-// Bring-up step 3a (spec 3.8): I2C scan.
+// Bring-up step 3a: I2C scan.
 //
-// Expects 0x3C (OLED) and 0x68 (DS3231). The ZS-042 RTC board also carries a
-// 24C32 EEPROM at 0x57, which the firmware doesn't use. If the OLED or RTC is
-// missing, check the SDA=A4/SCL=A5 wiring and 5V/GND before going further.
+// Expects 0x3C (OLED), 0x57 (unused EEPROM on the RTC board) and 0x68
+// (DS3231). If one is missing, check SDA=A4, SCL=A5, 5V and GND.
 #include <Wire.h>
 
 void setup() {
