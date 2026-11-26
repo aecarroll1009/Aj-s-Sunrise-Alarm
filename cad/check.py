@@ -69,8 +69,12 @@ def cone_top_diameters(part) -> list[float]:
             for f in part.faces().filter_by(GeomType.CONE)]
 
 
-def front_opening(part, y_lo: float, y_hi: float):
+def front_opening(part, y_lo: float, y_hi: float, min_depth: float = 0.0):
     """Measures the rectangular opening through a wall between two Y planes.
+
+    Args:
+        min_depth: ignore side faces shallower than this in Y, such as a
+            pocket's walls.
 
     Returns:
         (width, height, centre_x, centre_z) from the opening's side faces.
@@ -78,7 +82,7 @@ def front_opening(part, y_lo: float, y_hi: float):
     xs, zs = [], []
     for f in part.faces().filter_by(GeomType.PLANE):
         c = f.center()
-        if not (y_lo < c.Y < y_hi):
+        if not (y_lo < c.Y < y_hi) or f.bounding_box().size.Y < min_depth:
             continue
         n = f.normal_at()
         if abs(n.X) > 0.99:
@@ -104,24 +108,17 @@ def main() -> None:
           + ", ".join(f"{d:.2f} mm at x={e[0]:.1f}" for d, e in front))
     for name, want, x, wall in (
             ("button hole", 12.4, enc.BUTTON_POS[0], enc.BASE_WALL),
-            ("encoder hole", 7.4, enc.ENCODER_POS[0], enc.ENCODER_WALL)):
-        hits = [(d, e) for d, e in front if abs(e[0] - x) < 0.01 and d < 15]
-        check_true(f"{name} present", len(hits) == 1)
+            ("encoder hole", 7.4, enc.ENCODER_POS[0], enc.BASE_WALL)):
+        hits = [(d, e) for d, e in front if abs(e[0] - x) < 0.01]
+        check_true(f"{name} present, no pocket around it", len(hits) == 1)
         if hits:
             check(f"{name} diameter (measured)", hits[0][0], want)
             check(f"{name} through wall length", hits[0][1][3], wall)
-    pockets = [(d, e) for d, e in front
-               if abs(e[0] - enc.ENCODER_POS[0]) < 0.01 and d >= 15]
-    check_true("encoder pocket on the inside face", len(pockets) == 1)
-    if pockets:
-        d, e = pockets[0]
-        check("encoder pocket diameter", d, 20.0)
-        outer_skin = e[1] - e[3] / 2 - (-enc.BASE_D / 2)
-        check("wall left at encoder (pocket floor to outside)", outer_skin, 3.0)
     check_true("button is the leftmost control",
                enc.BUTTON_POS[0] < enc.ENCODER_POS[0] < enc.OLED_POS[0])
-    w, h, cx, cz = front_opening(tub, -enc.BASE_D / 2 - 0.01, front_in + 0.01)
-    check("OLED window width", w, 61.0)
+    w, h, cx, cz = front_opening(tub, -enc.BASE_D / 2 - 0.01, front_in + 0.01,
+                                 min_depth=enc.BASE_WALL - 0.01)
+    check("OLED window width", w, 62.0)
     check("OLED window height", h, 41.0)
     check("OLED window centre height = inside mid", cz,
           (enc.BASE_FLOOR + enc.TUB_H) / 2)
@@ -132,6 +129,23 @@ def main() -> None:
     check_true("OLED board fits between floor and deck",
                pcb_lo - enc.BASE_FLOOR >= 1.0 and enc.TUB_H - pcb_hi >= 1.0,
                f"z {pcb_lo:.1f}..{pcb_hi:.1f}, inside {enc.BASE_FLOOR:.1f}..{enc.TUB_H:.1f}")
+
+    floor_y = front_in - enc.OLED_PIN_POCKET_DEPTH
+    pin_floors = [f for f in tub.faces().filter_by(GeomType.PLANE)
+                  if abs(f.normal_at().Y) > 0.99 and abs(f.center().Y - floor_y) < 0.01
+                  and f.center().X < enc.OLED_POS[0]]
+    check_true("OLED pin pocket on the inside face, left of the window from outside",
+               len(pin_floors) == 1)
+    if pin_floors:
+        bb = pin_floors[0].bounding_box()
+        check("OLED pin pocket height", bb.size.Z, enc.OLED_PIN_POCKET_H)
+        check("OLED pin pocket reaches the window edge", bb.max.X,
+              enc.OLED_POS[0] - enc.OLED_WINDOW[0] / 2)
+        check_true("OLED pin pocket covers the board edge",
+                   bb.min.X <= enc.OLED_POS[0] - enc.OLED_PCB[0] / 2,
+                   f"x {bb.min.X:.1f}..{bb.max.X:.1f}")
+        check("wall left behind pin pocket", floor_y - (-enc.BASE_D / 2),
+              enc.BASE_WALL - enc.OLED_PIN_POCKET_DEPTH)
 
     print("\nOLED mount (QSJ M3 inserts from inside, board screws on from behind)")
     oled_xz = {(round(x, 2), round(z, 2)) for x, z in enc.oled_hole_positions()}

@@ -82,7 +82,8 @@ reprint only the affected part (usually `base_tub`).
 
 | Constant | Value | Check against |
 |---|---|---|
-| `OLED_WINDOW` | 61 x 41 mm | the OLED glass, measured about 60 x 40 mm, which passes through the window |
+| `OLED_WINDOW` | 62 x 41 mm (widened 1 mm after a test fit) | the OLED glass, measured about 60 x 40 mm, which passes through the window |
+| `OLED_PIN_POCKET_H` / `_DEPTH` | 13 mm / 2.5 mm | the soldered tips of the OLED's GND/VDD/SCL/SDA header, mid-height on the board's left edge seen from outside |
 | `OLED_GLASS_H` | 3 mm | glass height above the OLED board; sets how far the glass sits behind the outer face (2.5 mm) |
 | `OLED_PCB` | 71 x 49 mm (estimated) | the OLED board outline (clearance report and previews only) |
 | `OLED_HOLE_PITCH` | 66 x 44 mm (measured) | the OLED board's mounting holes |
@@ -95,8 +96,9 @@ reprint only the affected part (usually `base_tub`).
 The base walls and floor are 5 mm thick so the white PLA stays opaque; the
 extra thickness is on the inside, so the deck and shade are unchanged. The
 tub is 57 mm tall (60 mm with the deck) to fit the OLED board. The encoder
-sits in a 20 mm pocket on the inside face that leaves 3 mm of wall, so its
-short bushing still takes the nut.
+hole goes straight through the full 5 mm wall. A 2.5 mm deep pocket on the
+inside face, between the OLED window and the board edge, clears the
+soldered header pins.
 
 The LED core's walls are 3 mm thick (thickened inward, so the strip path is
 unchanged), and the strip's head and tail wires pass through 15 x 10 mm

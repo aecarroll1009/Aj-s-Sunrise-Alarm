@@ -202,7 +202,7 @@ def main() -> None:
                                                            enc.Align.MIN))
     inside = [(40, 260, 140), (0, -enc.BASE_D / 2, enc.FRONT_Z), (0, 0, 1)]
     render(enc.RENDER_DIR / "view_front_wall_inside.png", {"base_tub": front_half}, {},
-           inside, "Front wall from inside: OLED insert pads, encoder pocket",
+           inside, "Front wall from inside: OLED insert pads, pin pocket",
            show_strip=False)
     render(enc.RENDER_DIR / "view_front_wall_oled.png",
            {"base_tub": front_half, "oled_board": enc.oled_board()}, {},

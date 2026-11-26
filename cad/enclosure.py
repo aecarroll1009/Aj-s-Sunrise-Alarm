@@ -116,17 +116,17 @@ SCREW_HEAD_D = 6.6
 FRONT_Z = (BASE_FLOOR + TUB_H) / 2
 OLED_GLASS = (60.0, 40.0)
 OLED_GLASS_H = 3.0
-OLED_WINDOW = (61.0, 41.0)
+OLED_WINDOW = (62.0, 41.0)
 OLED_PCB = (71.0, 49.0)
 OLED_POS = (OUTER_SCALE * 26.0, FRONT_Z)
 OLED_HOLE_PITCH = (66.0, 44.0)
 OLED_PAD_H = 0.5
 OLED_PAD_R = 3.2
 OLED_INSERT_DEPTH = 4.5
+OLED_PIN_POCKET_H = 13.0
+OLED_PIN_POCKET_DEPTH = 2.5
 ENCODER_HOLE_D = 7.4
 ENCODER_POS = (OUTER_SCALE * -28.0, FRONT_Z)
-ENCODER_POCKET_D = 20.0
-ENCODER_WALL = 3.0
 BUTTON_HOLE_D = 12.4
 BUTTON_POS = (OUTER_SCALE * -50.0, FRONT_Z)
 
@@ -357,6 +357,22 @@ def oled_hole_positions() -> list[tuple[float, float]]:
     return [(cx + sx * x, cz + sz * z) for sx in (-1, 1) for sz in (-1, 1)]
 
 
+def oled_pin_pocket() -> Part:
+    """Returns the cutter for the OLED header pins' solder side.
+
+    The pins sit mid-height on the board's left edge as seen from outside
+    (-X). The pocket fills the inside face between that board edge and the
+    window, so the pin tips clear the wall.
+    """
+    x_lo = OLED_POS[0] - OLED_PCB[0] / 2 - 0.5
+    x_hi = OLED_POS[0] - OLED_WINDOW[0] / 2
+    y_hi = -BASE_D / 2 + BASE_WALL
+    return Pos((x_lo + x_hi) / 2, y_hi, OLED_POS[1]) * Box(
+        x_hi - x_lo, OLED_PIN_POCKET_DEPTH, OLED_PIN_POCKET_H,
+        align=(Align.CENTER, Align.MAX, Align.CENTER),
+    )
+
+
 def perfboard() -> Part:
     """Returns a stand-in for the perfboard, for previews only."""
     z = BASE_FLOOR + STANDOFF_H
@@ -489,11 +505,8 @@ def base_tub() -> Part:
         tub -= Pos(x, seat_y - OLED_INSERT_DEPTH / 2, z) * Rot(90, 0, 0) * Cylinder(
             INSERT_HOLE_D / 2, OLED_INSERT_DEPTH
         )
+    tub -= oled_pin_pocket()
     tub -= Pos(ENCODER_POS[0], front_y, ENCODER_POS[1]) * through_y(ENCODER_HOLE_D)
-    pocket = BASE_WALL - ENCODER_WALL
-    tub -= Pos(ENCODER_POS[0], front_y + BASE_WALL - pocket / 2, ENCODER_POS[1]) * (
-        through_y(ENCODER_POCKET_D, pocket)
-    )
     tub -= Pos(BUTTON_POS[0], front_y, BUTTON_POS[1]) * through_y(BUTTON_HOLE_D)
 
     rear_y = BASE_D / 2
